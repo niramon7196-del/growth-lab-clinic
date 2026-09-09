@@ -1,0 +1,2 @@
+sed -i -e "s/const nameStr = (p.firstName || (p as any).name || '').toString().trim();/const nameStr = (p.firstName || (p as any).name || '').toString().replace(\/^(ด\\\.ช\\\.\|ด\\\.ญ\\\.\|เด็กชาย\|เด็กหญิง\|นาย\|น\\\.ส\\\.\|นาง)\\s*\/i, '').trim();/g" src/App.tsx
+sed -i -e "s/return (!isInvalidHn) || Boolean(nameStr || nicknameStr || p.phone);/return (!isInvalidHn) \&\& Boolean(nameStr \&\& nameStr !== 'ไม่ระบุชื่อ' \&\& nameStr !== 'ผู้รับการดูแล' \&\& !nameStr.startsWith('คนไข้ ('));/g" src/App.tsx

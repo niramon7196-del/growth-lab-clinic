@@ -1,0 +1,2 @@
+sed -i -e "s/const \[cloudLogs, setCloudLogs\] = useState<CheckInRecord\[\]>(() => {/const [cloudLogs, setCloudLogs] = useState<CheckInRecord[]>(() => {\n    if (propLogs \&\& propLogs.length > 0) return propLogs;/g" src/components/CheckInAnalyticsPanel.tsx
+sed -i -e "s/  useEffect(() => {/  useEffect(() => {\n    if (propLogs \&\& propLogs.length > 0) setCloudLogs(propLogs);\n  }, [propLogs]);\n\n  useEffect(() => {\n    if (propLogs \&\& propLogs.length > 0) return;/g" src/components/CheckInAnalyticsPanel.tsx

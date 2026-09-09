@@ -1,0 +1,1 @@
+perl -0777 -pi -e 's/              <\/div>\n\n              <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0 rounded-b-2xl">/              <\/div>\n              <\/div>\n\n              <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0 rounded-b-2xl">/g' src/components/AppointmentsList.tsx

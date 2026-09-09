@@ -1,0 +1,1 @@
+perl -0777 -pi -e 's/\.app-shell \{[\s\S]*?\}/\.app-shell {\n  width: 100% !important;\n  max-width: 100vw !important;\n  display: flex;\n  position: relative;\n  box-sizing: border-box !important;\n}/g' src/index.css

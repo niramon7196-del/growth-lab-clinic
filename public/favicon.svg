@@ -1,0 +1,61 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Main 3D Sphere gradient: Fresh mint green/turquoise to vibrant cyan/azure blue -->
+    <linearGradient id="sphereGrad" x1="160" y1="300" x2="864" y2="724" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#48C78E" />
+      <stop offset="18%" stopColor="#2DD4BF" />
+      <stop offset="42%" stopColor="#06B6D4" />
+      <stop offset="72%" stopColor="#0EA5E9" />
+      <stop offset="100%" stopColor="#0284C7" />
+    </linearGradient>
+
+    <!-- Top gloss / glass reflection highlight -->
+    <radialGradient id="topGloss" cx="580" cy="280" r="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.40" />
+      <stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.10" />
+      <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+    </radialGradient>
+
+    <!-- Bottom 3D bevel / rim reflection -->
+    <linearGradient id="bottomRim" x1="512" y1="760" x2="512" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#00B4D8" stopOpacity="0" />
+      <stop offset="50%" stopColor="#00E5FF" stopOpacity="0.45" />
+      <stop offset="100%" stopColor="#0284C7" stopOpacity="0.80" />
+    </linearGradient>
+
+    <!-- Ambient Shadow underneath base -->
+    <radialGradient id="innerShadow" cx="512" cy="512" r="480" gradientUnits="userSpaceOnUse">
+      <stop offset="80%" stopColor="#000000" stopOpacity="0" />
+      <stop offset="98%" stopColor="#0369A1" stopOpacity="0.35" />
+      <stop offset="100%" stopColor="#0c4a6e" stopOpacity="0.55" />
+    </radialGradient>
+
+    <filter id="softGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0369A1" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <!-- Outer Sphere Base with soft shadow -->
+  <circle cx="512" cy="512" r="460" fill="url(#sphereGrad)" filter="url(#softGlow)" />
+  
+  <!-- 3D Depth Inner Ring -->
+  <circle cx="512" cy="512" r="460" fill="url(#innerShadow)" />
+
+  <!-- 3D Beveled Bottom Rim Light -->
+  <path d="M 148 680 C 200 860 340 960 512 960 C 684 960 824 860 876 680 C 800 880 660 944 512 944 C 364 944 224 880 148 680 Z" fill="url(#bottomRim)" />
+
+  <!-- Top Gloss Dome -->
+  <ellipse cx="512" cy="440" rx="430" ry="380" fill="url(#topGloss)" />
+
+  <!-- Crisp 3D Glass Perimeter Stroke -->
+  <circle cx="512" cy="512" r="459" stroke="rgba(255,255,255,0.30)" stroke-width="4" />
+
+  <!-- Bold Modern Typography 'GL' in pure white, exact proportions from Reference -->
+  <g fill="#FFFFFF" style="font-family: -apple-system, BlinkMacSystemFont, 'Montserrat', 'Inter', 'Segoe UI', Arial, sans-serif;">
+    <!-- Letter G -->
+    <path d="M 465 440 C 455 390 405 350 338 350 C 245 350 175 422 175 512 C 175 602 245 674 338 674 C 420 674 466 620 472 550 H 332 V 470 H 554 C 556 488 558 508 558 530 C 558 642 476 748 338 748 C 190 748 88 642 88 512 C 88 382 190 276 338 276 C 445 276 525 342 550 440 H 465 Z" />
+    
+    <!-- Letter L -->
+    <path d="M 618 286 H 702 V 666 H 882 V 740 H 618 V 286 Z" />
+  </g>
+</svg>

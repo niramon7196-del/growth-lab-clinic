@@ -1,0 +1,3 @@
+perl -0777 -pi -e 's/import React from '\''react'\'';/import React, { useEffect } from '\''react'\'';/g' src/components/ProfileLoadingFallback.tsx
+
+perl -0777 -pi -e 's/export default function ProfileLoadingFallback\(\{\s*isLoading,\s*patients,\s*onAutoLink\s*\}\:\s*Props\) \{/export default function ProfileLoadingFallback({ isLoading, patients, onAutoLink }: Props) {\n  useEffect(() => {\n    if (!isLoading && patients && patients.length > 0) {\n      if (!import.meta.env.PROD || import.meta.env.VITE_APP_ENV === '\''DEMO'\'') {\n        console.log('\''[ProfileLoadingFallback] Auto-linking latest patient for testing.'\'');\n        onAutoLink(patients[0]);\n      }\n    }\n  }, [isLoading, patients, onAutoLink]);\n/g' src/components/ProfileLoadingFallback.tsx

@@ -1,0 +1,128 @@
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "Growth Lab patient / participant record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Member/Patient ID (e.g. pat_001)" },
+        "hn": { "type": "string", "description": "Hospital Number (e.g. DEMO-10021)" },
+        "qrToken": { "type": "string", "description": "Unique QR deep-link token" },
+        "firstName": { "type": "string", "description": "First name of member" },
+        "lastName": { "type": "string", "description": "Last name of member" },
+        "nickname": { "type": "string", "description": "Nickname of member" },
+        "age": { "type": "number", "description": "Age in years" },
+        "weight": { "type": "number", "description": "Weight in kg" },
+        "height": { "type": "number", "description": "Height in cm" },
+        "startDate": { "type": "string", "description": "Program enrollment date YYYY-MM-DD" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "parentName": { "type": "string", "description": "Parent or guardian name" },
+        "parentPhone": { "type": "string", "description": "Parent or guardian phone" },
+        "notes": { "type": "string", "description": "Clinical notes" },
+        "status": { "type": "string", "enum": ["active", "completed", "on-hold"], "description": "Member status" },
+        "lastCheckIn": { "type": "string", "description": "Last check-in date YYYY-MM-DD" },
+        "isDemo": { "type": "boolean", "description": "Flag indicating demo/seed fixture" },
+        "createdAt": { "type": "string", "description": "Creation timestamp ISO string" },
+        "updatedAt": { "type": "string", "description": "Last updated timestamp ISO string" }
+      },
+      "required": ["id", "hn", "firstName", "lastName", "status"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient record indexed by HN",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Patient ID" },
+        "hn": { "type": "string", "description": "Hospital Number (e.g. DEMO-10021 or HN-1001)" },
+        "qrToken": { "type": "string", "description": "QR deep-link token" },
+        "firstName": { "type": "string", "description": "First name" },
+        "lastName": { "type": "string", "description": "Last name" },
+        "nickname": { "type": "string", "description": "Nickname" },
+        "age": { "type": "number", "description": "Age" },
+        "gender": { "type": "string", "description": "Gender" },
+        "weight": { "type": "number", "description": "Weight" },
+        "height": { "type": "number", "description": "Height" },
+        "assignments": { "type": "array", "description": "Assigned homework" },
+        "assignedExercises": { "type": "array", "description": "Assigned exercises" },
+        "status": { "type": "string", "description": "Status" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["hn", "firstName", "lastName"]
+    },
+    "DailyLog": {
+      "title": "DailyLog",
+      "description": "Daily exercise and check-in log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Log ID" },
+        "patientHn": { "type": "string", "description": "Patient HN" },
+        "patientId": { "type": "string", "description": "Patient ID" },
+        "date": { "type": "string", "description": "Log date YYYY-MM-DD" },
+        "type": { "type": "string", "description": "Log type (OMT, EXERCISE, EF, GNS, CHECKIN)" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["date"]
+    },
+    "CheckInRecord": {
+      "title": "CheckInRecord",
+      "description": "Daily attendance check-in event for a participant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique check-in ID (e.g. chk_1718000000_a1b2)" },
+        "patientId": { "type": "string", "description": "Foreign Key referencing Member.id" },
+        "date": { "type": "string", "description": "Calendar date string YYYY-MM-DD" },
+        "timestamp": { "type": "string", "description": "Display time in Thai format" },
+        "source": { "type": "string", "enum": ["APP", "QR"], "description": "Check-in channel source" },
+        "method": { "type": "string", "description": "Method descriptor" },
+        "actor": { "type": "string", "description": "User or participant name" },
+        "performedBy": { "type": "string", "description": "Name of the person who executed check-in" },
+        "status": { "type": "string", "enum": ["COMPLETED", "CONFIRMED", "SUCCESS"], "description": "Check-in status" },
+        "notes": { "type": "string", "description": "Optional notes" },
+        "createdAt": { "type": "string", "description": "Server timestamp" }
+      },
+      "required": ["id", "patientId", "date", "timestamp", "source"]
+    },
+    "HomeworkAssignment": {
+      "title": "HomeworkAssignment",
+      "description": "Prescribed OMT / EF exercise homework assigned to a member",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique assignment ID (e.g. asgn_pat_001_1)" },
+        "patientId": { "type": "string", "description": "Foreign Key referencing Member.id" },
+        "exerciseId": { "type": "string", "description": "Exercise identifier (e.g. EF-001)" },
+        "reps": { "type": "number", "description": "Target repetitions" },
+        "durationMinutes": { "type": "number", "description": "Target duration in minutes" },
+        "startDate": { "type": "string", "description": "Assignment start date YYYY-MM-DD" },
+        "endDate": { "type": "string", "description": "Assignment end date YYYY-MM-DD" },
+        "instruction": { "type": "string", "description": "Special clinical guidance" },
+        "status": { "type": "string", "enum": ["pending", "doing", "completed", "overdue"], "description": "Current assignment status" },
+        "lastSubmittedDate": { "type": "string", "description": "Date of latest completion YYYY-MM-DD" },
+        "updatedAt": { "type": "string", "description": "Timestamp ISO string" }
+      },
+      "required": ["id", "patientId", "exerciseId", "status"]
+    }
+  },
+  "firestore": {
+    "/members/{memberId}": {
+      "schema": { "$ref": "#/entities/Member" },
+      "description": "Root collection of participant member records"
+    },
+    "/patients/{hn}": {
+      "schema": { "$ref": "#/entities/Patient" },
+      "description": "Root collection of patient documents indexed by HN"
+    },
+    "/daily_logs/{logId}": {
+      "schema": { "$ref": "#/entities/DailyLog" },
+      "description": "Collection of daily exercise and check-in submission logs"
+    },
+    "/checkIns/{checkInId}": {
+      "schema": { "$ref": "#/entities/CheckInRecord" },
+      "description": "Collection of check-in events recorded across all members"
+    },
+    "/assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/HomeworkAssignment" },
+      "description": "Collection of prescribed homework assignments and completion states"
+    }
+  }
+}

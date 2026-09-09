@@ -1,0 +1,8 @@
+{
+  "name": "Growth Lab",
+  "description": "ระบบติดตามคนไข้และการฝึกกล้ามเนื้อใบหน้าและการหายใจ Growth Lab V1 (Dashboard, คนไข้, แบบฝึกบริหารกล้ามเนื้อใบหน้า, การนัดหมาย, แจ้งเตือน, ติดตามผล, ประเมินคะแนน และออก PDF)",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

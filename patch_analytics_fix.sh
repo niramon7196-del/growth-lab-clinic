@@ -1,0 +1,1 @@
+perl -0777 -pi -e 's/  useEffect\(\(\) => \{\n    if \(propLogs \&\& propLogs\.length > 0\) setCloudLogs\(propLogs\);\n  \}, \[propLogs\]\);\n\n  useEffect\(\(\) => \{\n    if \(propLogs \&\& propLogs\.length > 0\) return;\n    const checkAutoRollover/  useEffect\(\(\) => \{\n    const checkAutoRollover/g' src/components/CheckInAnalyticsPanel.tsx

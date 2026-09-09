@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // 1. GLOBAL SAFETY NET & HELPER FUNCTIONS
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ==========================================
+    // 2. PATIENTS COLLECTION (Indexed by HN)
+    // ==========================================
+    match /patients/{hn} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
+    }
+
+    // ==========================================
+    // 3. DAILY LOGS COLLECTION
+    // ==========================================
+    match /daily_logs/{logId} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
+    }
+
+    // ==========================================
+    // 4. MEMBERS COLLECTION
+    // ==========================================
+    match /members/{memberId} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
+    }
+
+    // ==========================================
+    // 5. CHECK-INS COLLECTION
+    // ==========================================
+    match /checkIns/{checkInId} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
+    }
+
+    // ==========================================
+    // 6. ASSIGNMENTS COLLECTION
+    // ==========================================
+    match /assignments/{assignmentId} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
+    }
+
+    // ==========================================
+    // 7. SETTINGS, STAFF, APPOINTMENTS, LOGS
+    // ==========================================
+    match /settings/{docId} {
+      allow read, write: if true;
+    }
+    match /staff/{staffId} {
+      allow read, write: if true;
+    }
+    match /appointments/{appId} {
+      allow read, write: if true;
+    }
+    match /logs/{logId} {
+      allow read, write: if true;
+    }
+  }
+}
