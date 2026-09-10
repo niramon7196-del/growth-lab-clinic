@@ -1232,7 +1232,7 @@ export default function PatientDashboard({
 
               {totalHomework > 0 ? (
                 <div className="space-y-3 flex-1">
-                  {homeworkAssignments.map((assign: HomeworkAssignment) => {
+                  {currentAssignments.map((assign: any) => {
                     const rawExId = assign.exerciseId || assign.id;
                     const fullTitle = getExerciseTitle(rawExId);
                     const isDone = assign.status === 'completed' || completedExercisesMap[assign.id] || completedExercisesMap[assign.exerciseId];

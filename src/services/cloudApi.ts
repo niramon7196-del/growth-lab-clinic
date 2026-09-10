@@ -1184,8 +1184,10 @@ export async function logExerciseSession(
     startTime: string;
     endTime?: string;
     durationSeconds?: number;
+    durationSec?: number;
     durationText?: string;
     reps?: number;
+    satisfaction?: number;
     score?: number;
     notes?: string;
   },

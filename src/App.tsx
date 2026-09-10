@@ -2717,7 +2717,7 @@ export default function App() {
         'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
         'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
         'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
-        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
+        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
       ];
     }
     if (userRole === 'ADMIN') {
@@ -2728,7 +2728,7 @@ export default function App() {
         'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
         'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
         'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
-        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
+        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
       ];
     }
     if (isPatient) {
@@ -3535,7 +3535,7 @@ export default function App() {
             <MediaLibraryHub userRole={userRole} onNavigate={setActiveTab} />
           )}
 
-          {(activeTab === 'Clinical Source' || activeTab === 'Project Dossier' || activeTab === 'เอกสารสำคัญโครงการ' || activeTab === 'เอกสารสำคัญโครงสร้างระบบ') && (
+          {(activeTab === 'Clinical Source' || activeTab === 'Project Dossier' || activeTab === 'เอกสารสำคัญโครงการ' || activeTab === 'เอกสารสำคัญโครงสร้างระบบ') && !isPatient && (
             <ClinicalSourceManager 
               sources={clinicalSourceDocuments}
               onUpdateSourceStatus={handleUpdateClinicalSourceStatus}

@@ -670,6 +670,13 @@ export async function syncNutritionToGoogleSheets(
     action?: string;
     score: string;
     status: string;
+    patientName?: string;
+    name?: string;
+    exerciseId?: string;
+    exerciseTitle?: string;
+    durationSec?: number;
+    reps?: number;
+    satisfaction?: number;
     itemsChecked?: string[];
   }
 ) {
@@ -725,6 +732,13 @@ export async function syncSleepEfToGoogleSheets(
     action?: string;
     score: string;
     status: string;
+    patientName?: string;
+    name?: string;
+    exerciseId?: string;
+    exerciseTitle?: string;
+    durationSec?: number;
+    reps?: number;
+    satisfaction?: number;
     sleepHours: number;
     efHours: number;
     rating: number;
@@ -842,6 +856,7 @@ export async function syncCleanDailySummaryToGoogleSheets(
     sleepRating?: number;
     complianceScore: number;
     name?: string;
+    patientName?: string;
     checkInTime?: string;
     totalAppOpens?: number;
     classification?: string;
