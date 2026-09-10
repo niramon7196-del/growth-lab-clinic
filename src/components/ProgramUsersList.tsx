@@ -300,7 +300,7 @@ export default function ProgramUsersList({
   const onHoldCount = safePatients.filter((p) => p?.status === 'on-hold').length;
 
   return (
-    <div className="space-y-6 text-left w-full max-w-full lg:max-w-7xl mx-auto pb-12 overflow-x-hidden box-border">
+    <div className="space-y-4 sm:space-y-6 text-left w-full max-w-full lg:max-w-7xl mx-auto pb-12 overflow-x-hidden box-border">
       {/* 1. TOP HEADER & METRIC SUMMARY */}
       <section className="bg-white p-6 sm:p-8 rounded-3xl border border-purple-200/80 shadow-2xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

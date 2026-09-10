@@ -5,6 +5,15 @@
 
 import { Patient, Appointment, CheckInRecord, Exercise, SessionLog } from '../types';
 import { calculateAgeFromDob, getSuggestedTitlePrefix, detectGenderFromPatientData } from '../utils/patientUtils';
+import { 
+  routeAppointmentToGoogleSheets, 
+  formatAppointment9Columns, 
+  APPOINTMENT_COLUMNS, 
+  APPOINTMENT_SHEET_NAME, 
+  dataRouter 
+} from './dataRouter';
+
+export { dataRouter, routeAppointmentToGoogleSheets, formatAppointment9Columns, APPOINTMENT_COLUMNS, APPOINTMENT_SHEET_NAME };
 
 export const API_URL = 'https://script.google.com/macros/s/AKfycbwKBK8vNUYLH7sAdM9x_m9Eur8os8c1izD-61f6M2gvuUIKKQbIXwEQwbwFEFh4RT0/exec';
 
@@ -1205,22 +1214,39 @@ export async function logExerciseSession(
 }
 
 /**
- * 4. saveAppointment: Save / update appointment
+ * 4. saveAppointment: Save / update appointment in Google Sheets ("Appointments" tab)
+ * Formats payload to match the 9 columns of "Appointments" sheet 100%:
+ * ID, HN, PatientName, Date, Time, Type, Doctor, Status, Notes
  */
 export async function saveAppointment(
   appointmentData: Partial<Appointment> & { hn?: string; patientId?: string; title?: string; [key: string]: any },
   customUrl?: string
 ): Promise<CloudApiResponse> {
-  const payload: Appointment = {
-    id: appointmentData.id || `apt_${Date.now()}`,
-    patientId: appointmentData.patientId || appointmentData.hn || '',
-    patientName: appointmentData.patientName || (appointmentData as any).name || 'ผู้รับการดูแล',
-    hn: appointmentData.hn || appointmentData.patientId || '',
-    date: appointmentData.date || new Date().toISOString().split('T')[0],
-    time: appointmentData.time || '10:00',
-    type: (appointmentData.type as any) || 'clinical',
-    status: (appointmentData.status as any) || 'pending',
-    notes: appointmentData.notes || '',
+  const { orderedPayload, rowData } = formatAppointment9Columns(appointmentData);
+
+  const payload: any = {
+    sheetName: APPOINTMENT_SHEET_NAME,
+    targetSheet: APPOINTMENT_SHEET_NAME,
+    tab: APPOINTMENT_SHEET_NAME,
+    sheet: APPOINTMENT_SHEET_NAME,
+    targetTab: APPOINTMENT_SHEET_NAME,
+    ...orderedPayload,
+    rowData,
+    row: rowData,
+    values: rowData,
+    columns: [...APPOINTMENT_COLUMNS],
+    id: orderedPayload.ID,
+    appointmentId: orderedPayload.ID,
+    patientId: orderedPayload.HN,
+    patientName: orderedPayload.PatientName,
+    hn: orderedPayload.HN,
+    date: orderedPayload.Date,
+    time: orderedPayload.Time,
+    type: orderedPayload.Type,
+    doctor: orderedPayload.Doctor,
+    dentistName: orderedPayload.Doctor,
+    status: orderedPayload.Status,
+    notes: orderedPayload.Notes,
     googleCalendarEventId: appointmentData.googleCalendarEventId || '',
     googleCalendarHtmlLink: appointmentData.googleCalendarHtmlLink || ''
   };
@@ -1228,8 +1254,23 @@ export async function saveAppointment(
   // 1. Save locally first
   saveAppointmentLocal(payload);
 
-  // 2. Sync to Cloud
-  return cloudPost('saveAppointment', payload, customUrl);
+  // 2. Route strictly to "Appointments" tab via routeAppointmentToGoogleSheets
+  const routeResult = await routeAppointmentToGoogleSheets(payload, customUrl);
+  if (routeResult.success) {
+    return { success: true, data: routeResult.data, appointments: [payload] };
+  }
+
+  // Fallback to cloudPost if needed
+  const primaryResult = await cloudPost('createAppointment', payload, customUrl);
+  if (!primaryResult.success && primaryResult.error) {
+    console.warn('[cloudApi] Retrying saveAppointment with "appendRow"...');
+    const fallbackResult = await cloudPost('appendRow', payload, customUrl);
+    if (!fallbackResult.success) {
+      return cloudPost('saveAppointment', payload, customUrl);
+    }
+    return fallbackResult;
+  }
+  return primaryResult;
 }
 
 export interface ClinicAdminUser {

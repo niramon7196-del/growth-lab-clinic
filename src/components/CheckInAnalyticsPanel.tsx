@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, CheckCircle2, Clock, AlertTriangle, Activity, 
@@ -48,18 +48,23 @@ interface CheckInAnalyticsPanelProps {
   patients: Patient[];
   onSelectPatient?: (patientId: string) => void;
   onNavigate?: (tab: string, patientId?: string, subTab?: string) => void;
+  onRefresh?: (showToast?: boolean) => void;
+  isLoading?: boolean;
 }
 
 export default function CheckInAnalyticsPanel({
   patients,
   logs: propLogs,
   onSelectPatient,
-  onNavigate
+  onNavigate,
+  onRefresh,
+  isLoading
 }: CheckInAnalyticsPanelProps) {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CONSISTENT' | 'IRREGULAR' | 'DORMANT' | 'TODAY'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [isRollingOver, setIsRollingOver] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExportedToday, setIsExportedToday] = useState(() => isDailySummaryExportedToday());
   const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
   const [cloudLogs, setCloudLogs] = useState<CheckInRecord[]>(() => {
@@ -78,19 +83,61 @@ export default function CheckInAnalyticsPanel({
     if (propLogs && propLogs.length > 0) setCloudLogs(propLogs);
   }, [propLogs]);
 
+  // Store latest onRefresh in a ref to avoid stale closure without triggering re-renders
+  const onRefreshRef = useRef(onRefresh);
   useEffect(() => {
-    if (propLogs && propLogs.length > 0) return;
-    const fetchLogs = () => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  // Real-time synchronization listeners & background polling for instant follow-up updates
+  useEffect(() => {
+    const handleSync = () => {
       cloudApi.getDailyLogs().then(res => {
         if (res.success && Array.isArray(res.logs) && res.logs.length > 0) {
           setCloudLogs(res.logs);
         }
       });
+      // DO NOT call onRefresh here! It causes an infinite loop because 
+      // onRefresh triggers cloudApi.getPatients() which emits 'growthlab_patients_updated'
+      // which triggers this handleSync again.
     };
-    fetchLogs();
-    window.addEventListener('focus', fetchLogs);
-    return () => window.removeEventListener('focus', fetchLogs);
-  }, [propLogs]);
+
+    window.addEventListener('growthlab_patients_updated', handleSync);
+    window.addEventListener('growthlab_checkin_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    // Auto-poll silently every 8 seconds for live dashboard updates
+    const pollTimer = setInterval(() => {
+      handleSync();
+    }, 8000);
+
+    return () => {
+      window.removeEventListener('growthlab_patients_updated', handleSync);
+      window.removeEventListener('growthlab_checkin_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleSync);
+      clearInterval(pollTimer);
+    };
+  }, []); // Remove onRefresh from dependencies to prevent interval reset loop
+
+  const handleManualRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) {
+        // Show toast on manual refresh
+        await onRefresh(true);
+      }
+      const res = await cloudApi.getDailyLogs();
+      if (res.success && Array.isArray(res.logs)) {
+        setCloudLogs(res.logs);
+      }
+    } catch (e) {
+      console.warn('[CheckInAnalyticsPanel] Refresh warning:', e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  }, [onRefresh]);
 
   // Compute Daily Clinic Summary
   const dailySummary = useMemo(() => {
@@ -574,6 +621,16 @@ export default function CheckInAnalyticsPanel({
               <span>ภาพรวมคลินิก</span>
             </button>
           )}
+
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing || isLoading}
+            className="px-3.5 py-2 bg-white/90 hover:bg-white text-purple-900 font-bold text-xs rounded-xl border border-purple-200/80 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 disabled:opacity-60"
+            title="ดึงข้อมูลอัปเดตล่าสุดจาก Google Sheets และ Cloud ทันที"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-purple-600 ${isRefreshing || isLoading ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing || isLoading ? 'กำลังซิงก์...' : 'ซิงก์ข้อมูลสด'}</span>
+          </button>
 
           <button
             onClick={handleExportToGoogleSheets}

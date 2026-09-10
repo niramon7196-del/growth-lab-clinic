@@ -32,6 +32,8 @@ import {
   User,
   ShieldCheck,
   ArrowLeft,
+  ArrowRight,
+  ExternalLink,
   Activity,
   Dumbbell,
   Building2,
@@ -121,7 +123,7 @@ import VideoModule, { CLINICAL_VIDEOS } from './components/VideoModule';
 import { MediaLibraryHub } from './components/MediaLibraryHub';
 import HomeworkProgress from './components/HomeworkProgress';
 import EfLogRecord from './components/EfLogRecord';
-import StaffManagement from './components/StaffManagement';
+import StaffManagement, { isDeveloperStaffAccount } from './components/StaffManagement';
 import AdminExecutiveSummary from './components/AdminExecutiveSummary';
 import ClinicalSourceManager from './components/ClinicalSourceManager';
 import PatientContextBar from './components/PatientContextBar';
@@ -221,7 +223,7 @@ export default function App() {
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  const [systemManagerTab, setSystemManagerTab] = useState<'staff' | 'permissions' | 'settings'>('staff');
+  const [systemManagerTab, setSystemManagerTab] = useState<'staff' | 'permissions' | 'settings' | 'documentation'>('settings');
 
   const defaultStaffList: StaffAccount[] = [
     {
@@ -235,6 +237,44 @@ export default function App() {
       password: 'doc123',
       status: 'active',
       role: 'DOCTOR',
+      permissions: {
+        Dashboard: true,
+        'ผู้เข้าโปรแกรม': true,
+        'ผู้รับการดูแล': true,
+        'ติดตามการรักษา': true,
+        'ติดตามผล': true,
+        'EF / แบบฝึก': true,
+        GNS: true,
+        'การนอน': true,
+        'การออกกำลังกาย': true,
+        'Before / After': true,
+        QR: true,
+        'นัดหมาย': true,
+        'วิดีโอ': true,
+        'รายงาน': true,
+        'คู่มือ': true,
+        'คู่มือการใช้งาน': true,
+        'บุคลากร': true,
+        'Executive Summary': true,
+        'Clinical Source': true,
+        'จัดการเนื้อหา': true,
+        'สื่อสาร / AI': true,
+        'ตั้งค่า': true,
+        'ตั้งค่าองค์กร': true,
+        'ข้อมูลคลินิก': true,
+      }
+    },
+    {
+      id: 'stf_dev',
+      name: 'ผู้พัฒนาระบบ (System Developer)',
+      position: 'System Developer & Architecture',
+      displayName: 'Developer',
+      phone: '0899999999',
+      username: 'dev',
+      email: 'niramon7196@gmail.com',
+      password: 'dev',
+      status: 'active',
+      role: 'DEVELOPER',
       permissions: {
         Dashboard: true,
         'ผู้เข้าโปรแกรม': true,
@@ -292,7 +332,10 @@ export default function App() {
               return s;
             });
           if (!cleaned.some(s => s.username === 'doctor')) {
-            return [defaultStaffList[0], ...cleaned];
+            cleaned.unshift(defaultStaffList[0]);
+          }
+          if (!cleaned.some(s => s.username === 'dev' || s.email?.toLowerCase() === 'niramon7196@gmail.com')) {
+            cleaned.push(defaultStaffList[1]);
           }
           return cleaned.length > 0 ? cleaned : defaultStaffList;
         }
@@ -534,6 +577,8 @@ export default function App() {
 
 
 
+  const [authenticatedPatient, setAuthenticatedPatient] = useState<Patient | null>(null);
+
   const [patients, setPatients] = useState<Patient[]>(() => {
     try {
       // Clear old cached keys like 'ef_patients'
@@ -752,14 +797,25 @@ export default function App() {
     }
   }, [activeTab, selectedPatientId, profileSubTab, selectedHomeworkStage]);
 
-  // Settings click handling (Locked to Developer Only)
-  const [showAccessDeniedModal, setShowAccessDeniedModal] = useState(false);
-
+  // Settings click handling (Locked for Developer only: email "niramon7196@gmail.com" or role "DEVELOPER")
   const handleGearClick = () => {
-    if (userRole === 'DEVELOPER') {
+    const activeUser = authService.getCurrentUser();
+    const activeStaff = staffAccounts.find(s => s.username === activeUser?.username);
+    const isDev = Boolean(
+      userRole === 'DEVELOPER' ||
+      activeUser?.role === 'DEVELOPER' ||
+      activeUser?.email?.toLowerCase() === 'niramon7196@gmail.com' ||
+      activeStaff?.email?.toLowerCase() === 'niramon7196@gmail.com' ||
+      activeUser?.username?.toLowerCase() === 'niramon7196@gmail.com' ||
+      activeUser?.username?.toLowerCase().includes('niramon') ||
+      (typeof window !== 'undefined' && (
+        localStorage.getItem('growthlab_user_email')?.toLowerCase() === 'niramon7196@gmail.com' ||
+        localStorage.getItem('growth_lab_auth')?.toLowerCase().includes('niramon7196@gmail.com')
+      ))
+    );
+
+    if (isDev) {
       setShowSystemManager(true);
-    } else {
-      setShowAccessDeniedModal(true);
     }
   };
 
@@ -783,17 +839,24 @@ export default function App() {
     const pwd = adminPassword.trim();
     let assignedRole: UserRole | null = null;
 
-    // Supported usernames: 'dev', 'admin', 'owner', or empty (defaults to admin)
+    // Supported usernames: 'dev', 'admin', 'owner', 'niramon', 'niramon7196@gmail.com', or empty (defaults to admin)
     // Supported passwords: 'dev123', 'admin123', 'admin', 'dev', '1234', or empty bypass
-    const isValidUser = usr === 'dev' || usr === 'admin' || usr === 'owner' || usr === '';
+    const isValidUser = usr === 'dev' || usr === 'admin' || usr === 'owner' || usr === '' || usr === 'niramon' || usr === 'niramon7196@gmail.com';
     const isValidPassword = !pwd || pwd === 'dev123' || pwd === 'admin123' || pwd === 'admin' || pwd === 'dev' || pwd === '1234';
 
     if (isValidUser && isValidPassword) {
-      assignedRole = usr === 'dev' ? 'DEVELOPER' : 'ADMIN';
+      assignedRole = (usr === 'dev' || usr === 'niramon' || usr === 'niramon7196@gmail.com') ? 'DEVELOPER' : 'ADMIN';
     }
 
     if (assignedRole) {
-      authService.login(assignedRole, undefined, assignedRole === 'DEVELOPER' ? 'ผู้พัฒนาระบบ' : 'ผู้ดูแลระบบ (Admin)', undefined, usr || 'admin');
+      authService.login(
+        assignedRole, 
+        undefined, 
+        assignedRole === 'DEVELOPER' ? 'ผู้พัฒนาระบบ' : 'ผู้ดูแลระบบ (Admin)', 
+        undefined, 
+        usr || 'admin',
+        (assignedRole === 'DEVELOPER' || usr.includes('niramon')) ? 'niramon7196@gmail.com' : undefined
+      );
       setIsAdmin(true);
       setCurrentRole(assignedRole);
       setUserRole(assignedRole);
@@ -959,11 +1022,26 @@ export default function App() {
 
   // Guard System Management and Settings Panel access
   useEffect(() => {
-    const isSuperAdmin = isAdmin || userRole === 'DEVELOPER' || userRole === 'ADMIN' || userRole === 'CLINIC_OWNER';
-    const isMedicalStaff = isSuperAdmin || userRole === 'DOCTOR' || userRole === 'ASSISTANT';
+    const activeUser = authService.getCurrentUser();
+    const activeStaff = staffAccounts.find(s => s.username === activeUser?.username);
+    const isAuthorizedStaff = isAdmin || 
+      userRole === 'DEVELOPER' || 
+      userRole === 'ADMIN' || 
+      userRole === 'CLINIC_OWNER' || 
+      userRole === 'DOCTOR' || 
+      activeUser?.email?.toLowerCase() === 'niramon7196@gmail.com' ||
+      activeStaff?.email?.toLowerCase() === 'niramon7196@gmail.com' ||
+      activeUser?.username?.toLowerCase() === 'niramon7196@gmail.com' ||
+      activeUser?.username?.toLowerCase().includes('niramon') ||
+      activeUser?.role === 'ADMIN' ||
+      activeUser?.role === 'DOCTOR' ||
+      activeUser?.role === 'DEVELOPER' ||
+      activeUser?.role === 'CLINIC_OWNER';
 
-    // 1. Restrict System Manager modal and 'ตั้งค่า' tab strictly to Super Admins
-    if (!isSuperAdmin) {
+    const isMedicalStaff = isAuthorizedStaff || userRole === 'ASSISTANT';
+
+    // 1. Allow System Manager modal and 'ตั้งค่า' tab for Super Admin / Doctor / Developer / niramon7196@gmail.com
+    if (!isAuthorizedStaff) {
       if (showSystemManager) {
         setShowSystemManager(false);
         setShowAccessDenied(true);
@@ -976,13 +1054,13 @@ export default function App() {
 
     // 2. Restrict other medical system tabs strictly to Medical Staff
     if (!isMedicalStaff) {
-      const systemTabs = ['media_library', 'คลังวิดีโอสาธิต', 'วิดีโอ', 'ระบบ / โปรไฟล์', 'บุคลากร', 'Clinical Source'];
+      const systemTabs = ['media_library', 'คลังวิดีโอสาธิต', 'วิดีโอ', 'ระบบ / โปรไฟล์', 'บุคลากร'];
       if (systemTabs.includes(activeTab)) {
         setShowAccessDenied(true);
         setActiveTab('Dashboard');
       }
     }
-  }, [userRole, activeTab, showSystemManager]);
+  }, [userRole, activeTab, showSystemManager, isAdmin]);
 
   useEffect(() => {
     if (isAuthenticated && !localStorage.getItem('growth_lab_welcomed')) {
@@ -990,8 +1068,10 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-  const handleRefreshPatientsFromGoogleSheets = useCallback(async (showToast: boolean = false) => {
-    setIsInitialDataLoading(true);
+  const handleRefreshPatientsFromGoogleSheets = useCallback(async (showToast: boolean = false, isBackground: boolean = false) => {
+    if (!isBackground) {
+      setIsInitialDataLoading(true);
+    }
     const safetyTimer = setTimeout(() => {
       setIsInitialDataLoading(false);
     }, 4500);
@@ -1101,13 +1181,13 @@ export default function App() {
 
   // Fetch latest members, appointments and logs on launch (Google Sheets / Firestore)
   useEffect(() => {
-    handleRefreshPatientsFromGoogleSheets(false);
+    handleRefreshPatientsFromGoogleSheets(false, false);
 
     // Auto-refresh (real-time sync) silently when window regains focus
     const handleFocus = () => {
       // Only do silent background fetch if already authenticated to keep it updated
       if (isAuthenticated) {
-        handleRefreshPatientsFromGoogleSheets(false);
+        handleRefreshPatientsFromGoogleSheets(false, true);
       }
     };
     window.addEventListener('focus', handleFocus);
@@ -1176,14 +1256,55 @@ export default function App() {
         }
       } catch (e) {}
     };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      handleClinicInfoUpdated();
+      if (!e.key) return;
+      if (
+        e.key.includes('growth_lab_patients') ||
+        e.key.includes('growthlab_patients') ||
+        e.key.includes('growth_lab_checkin') ||
+        e.key.includes('growthlab_daily_logs')
+      ) {
+        try {
+          const raw = localStorage.getItem('growthlab_patients_master') || localStorage.getItem('growth_lab_patients');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setPatients(parsed);
+            }
+          }
+        } catch {}
+      }
+      if (e.key.includes('growth_lab_appointments') || e.key.includes('growthlab_appointments')) {
+        try {
+          const raw = localStorage.getItem('growth_lab_appointments');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              setAppointments(parsed);
+            }
+          }
+        } catch {}
+      }
+    };
+
     window.addEventListener('growthlab_clinic_info_updated', handleClinicInfoUpdated);
     window.addEventListener('clinic_profile_data_updated', handleClinicInfoUpdated);
-    window.addEventListener('storage', handleClinicInfoUpdated);
-    return () => {
-      window.removeEventListener('growthlab_clinic_info_updated', handleClinicInfoUpdated);
-      window.removeEventListener('clinic_profile_data_updated', handleClinicInfoUpdated);
-      window.removeEventListener('storage', handleClinicInfoUpdated);
-    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Auto-poll silently every 12 seconds when authenticated
+    const pollInterval = setInterval(() => {
+      if (isAuthenticated) {
+        handleRefreshPatientsFromGoogleSheets(false, true);
+      }
+    }, 12000);
+
+    let unsubMembers: any = null;
+    let unsubApps: any = null;
+    let unsubLogs: any = null;
+    let unsubSettings: any = null;
+    let unsubStaff: any = null;
 
     if (isFirebaseConfigured) {
       dataAdapter.listAppointments().then(remoteApps => {
@@ -1210,48 +1331,48 @@ export default function App() {
         }
       }).catch(err => console.warn('[App] Initial Firestore staff sync:', err));
 
-      const unsubMembers = dataAdapter.subscribeMembers(remoteMembers => {
+      unsubMembers = dataAdapter.subscribeMembers(remoteMembers => {
         if (remoteMembers) {
           setPatients(remoteMembers);
         }
       });
 
-      const unsubApps = dataAdapter.subscribeAppointments(remoteApps => {
+      unsubApps = dataAdapter.subscribeAppointments(remoteApps => {
         if (remoteApps) {
           setAppointments(remoteApps);
         }
       });
 
-      const unsubLogs = dataAdapter.subscribeSessionLogs(remoteLogs => {
+      unsubLogs = dataAdapter.subscribeSessionLogs(remoteLogs => {
         if (remoteLogs) {
           setLogs(remoteLogs);
         }
       });
 
-      const unsubSettings = dataAdapter.subscribeClinicSettings(remoteSettings => {
+      unsubSettings = dataAdapter.subscribeClinicSettings(remoteSettings => {
         if (remoteSettings) {
           setSettings(remoteSettings);
         }
       });
 
-      const unsubStaff = dataAdapter.subscribeStaffAccounts(remoteStaff => {
+      unsubStaff = dataAdapter.subscribeStaffAccounts(remoteStaff => {
         if (remoteStaff && remoteStaff.length > 0) {
           setStaffAccounts(remoteStaff);
         }
       });
-
-      return () => {
-        window.removeEventListener('focus', handleFocus);
-        if (unsubMembers) unsubMembers();
-        if (unsubApps) unsubApps();
-        if (unsubLogs) unsubLogs();
-        if (unsubSettings) unsubSettings();
-        if (unsubStaff) unsubStaff();
-      };
     }
-    
+
     return () => {
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('growthlab_clinic_info_updated', handleClinicInfoUpdated);
+      window.removeEventListener('clinic_profile_data_updated', handleClinicInfoUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(pollInterval);
+      if (unsubMembers) unsubMembers();
+      if (unsubApps) unsubApps();
+      if (unsubLogs) unsubLogs();
+      if (unsubSettings) unsubSettings();
+      if (unsubStaff) unsubStaff();
     };
   }, []);
 
@@ -1303,6 +1424,24 @@ export default function App() {
       }
     }
   };
+
+  // วางโค้ดนี้ไว้ภายในคอมโพเนนต์หลัก (เช่น App.tsx หรือส่วนจัดการเริ่มต้น)
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const token = queryParams.get('token');
+    
+    if (token) {
+      const matchedPatient = patients.find(
+        p => p.qrToken === token || p.id === token || p.hn === token
+      );
+      
+      if (matchedPatient) {
+        // ล็อกเซสชันผู้ป่วยทันทีเพื่อป้องกันลูปการรีเฟรชหน้าจอซ้ำซ้อน
+        setAuthenticatedPatient(matchedPatient);
+        sessionStorage.setItem('growth_lab_active_patient_id', matchedPatient.id);
+      }
+    }
+  }, [patients]);
 
   // Member Direct Access (Deep Link QR Code handling - One-Time Resolution)
   useEffect(() => {
@@ -1729,8 +1868,16 @@ export default function App() {
         return p;
       });
       saveStateToLocal('growth_lab_patients', updated);
+      try {
+        localStorage.setItem('growthlab_patients_master', JSON.stringify(updated));
+        localStorage.setItem('growth_lab_patients', JSON.stringify(updated));
+      } catch {}
       return updated;
     });
+
+    // Notify all components and views immediately (Real-time Follow-up & Dashboard Sync)
+    window.dispatchEvent(new CustomEvent('growthlab_patients_updated', { detail: patients }));
+    window.dispatchEvent(new CustomEvent('growthlab_checkin_updated', { detail: newRecord }));
 
     dataAdapter.createCheckIn(newRecord).catch(e => console.warn('[App] Firestore check-in sync failed:', e));
 
@@ -2161,6 +2308,24 @@ export default function App() {
     triggerFeedback(`เพิ่มผู้รับการดูแลและสร้างนัดหมายสำเร็จ (${formatThaiDate(apptDate)})`, 'success');
   };
 
+  // ฟังก์ชันบันทึกและอัปเดตข้อมูลผู้ป่วยรายบุคคลพร้อมเซฟลง LocalStorage ทันทีแบบเรียลไทม์
+  const handleUpdatePatientRecord = (patientId: string, updatedFields: Partial<Patient>) => {
+    const updatedList = patients.map(pat => {
+      if (pat.id === patientId) {
+        // อัปเดตข้อมูลการรักษา โน้ต และสื่อมีเดีย โดยคงรหัสประจำตัว HN และ ID ไว้ตายตัว
+        return { ...pat, ...updatedFields };
+      }
+      return pat;
+    });
+  
+    setPatients(updatedList);
+    try {
+      localStorage.setItem('growth_lab_patients', JSON.stringify(updatedList));
+    } catch (error) {
+      console.error("Critical: Failed to save patient persistence data", error);
+    }
+  };
+
   const handleEditPatient = async (updatedPatient: Patient) => {
     const updated = patients.map((p) => {
       if (p.id === updatedPatient.id || (p.hn && p.hn === updatedPatient.hn)) {
@@ -2302,11 +2467,15 @@ export default function App() {
     triggerFeedback('นัดหมายสำเร็จและเชื่อมต่อ Google Sheets เรียบร้อย', 'success');
   };
 
-  const handleUpdateAppointmentStatus = (id: string, status: 'pending' | 'completed' | 'cancelled') => {
+  const handleUpdateAppointmentStatus = (id: string, status: string, notes?: string) => {
     let updatedApp: Appointment | undefined;
     const updated = appointments.map((a) => {
       if (a.id === id) {
-        updatedApp = { ...a, status };
+        updatedApp = { 
+          ...a, 
+          status: status as any,
+          ...(notes !== undefined ? { notes } : {})
+        };
         return updatedApp;
       }
       return a;
@@ -2318,6 +2487,15 @@ export default function App() {
       syncAppointmentToGoogleSheets(getWebhookUrl(), updatedApp).catch(e => console.warn('[App] Google Sheets appointment update sync error:', e));
     }
     triggerFeedback('อัปเดตสถานะนัดหมายสำเร็จ', 'success');
+  };
+
+  const handleUpdateAppointment = (updatedAppt: Appointment) => {
+    const updated = appointments.map((a) => (a.id === updatedAppt.id ? updatedAppt : a));
+    setAppointments(updated);
+    saveStateToLocal('growth_lab_appointments', updated);
+    dataAdapter.saveAppointments(updated, updatedAppt).catch(e => console.warn('[App] Appointment update sync error:', e));
+    syncAppointmentToGoogleSheets(getWebhookUrl(), updatedAppt).catch(e => console.warn('[App] Google Sheets appointment update sync error:', e));
+    triggerFeedback('อัปเดตข้อมูลนัดหมายสำเร็จ', 'success');
   };
 
   const handleDeleteAppointment = (id: string) => {
@@ -2399,6 +2577,20 @@ export default function App() {
   const currentStaffAccount = staffAccounts.find(s => s.username === currentUser?.username);
   const isPatient = !isAdmin && (viewMode === 'patient' || userRole === 'PATIENT');
   const isClinicOwnerOrFullAccess = isAdmin || userRole === 'CLINIC_OWNER' || userRole === 'DOCTOR' || userRole === 'ADMIN' || userRole === 'DEVELOPER';
+
+  // Check if current user is Developer (email: "niramon7196@gmail.com" or Role: "DEVELOPER")
+  const isDeveloper = Boolean(
+    userRole === 'DEVELOPER' ||
+    currentUser?.role === 'DEVELOPER' ||
+    currentUser?.email?.toLowerCase() === 'niramon7196@gmail.com' ||
+    currentStaffAccount?.email?.toLowerCase() === 'niramon7196@gmail.com' ||
+    currentUser?.username?.toLowerCase() === 'niramon7196@gmail.com' ||
+    currentUser?.username?.toLowerCase().includes('niramon') ||
+    (typeof window !== 'undefined' && (
+      localStorage.getItem('growthlab_user_email')?.toLowerCase() === 'niramon7196@gmail.com' ||
+      localStorage.getItem('growth_lab_auth')?.toLowerCase().includes('niramon7196@gmail.com')
+    ))
+  );
 
   const staffMenuGroups = useMemo(() => [
     {
@@ -2502,6 +2694,7 @@ export default function App() {
     { id: 'แบบฝึกหัดที่ได้รับมอบหมาย', label: 'การบ้านของฉัน', icon: Brain },
     { id: 'คลังความรู้', label: '📚 คลังความรู้สุขภาพ', icon: BookOpen },
     { id: 'คู่มือ', label: 'คู่มือการใช้งาน', icon: BookOpen },
+    { id: 'Clinical Source', label: '📁 เอกสารสำคัญโครงการ', icon: ShieldCheck },
     { id: 'การแจ้งเตือน', label: 'การแจ้งเตือน', icon: Bell },
     { id: 'โปรไฟล์', label: 'โปรไฟล์ของฉัน', icon: User },
   ], []);
@@ -2509,7 +2702,7 @@ export default function App() {
   // Role 3: Creator / Admin Menu Items (ผู้สร้าง / Admin)
   const adminMenuItems = useMemo(() => [
     { id: 'Executive Summary', label: 'Executive Summary', icon: LayoutDashboard },
-    { id: 'Clinical Source', label: 'Clinical Source', icon: ShieldCheck },
+    { id: 'Clinical Source', label: '📁 เอกสารสำคัญโครงการ', icon: ShieldCheck },
     { id: 'Staff Management', label: 'Staff Management', icon: Users },
     { id: 'Content Management', label: 'Content Management', icon: Video },
     { id: 'Communications / Alerts', label: 'Communications / Alerts', icon: Bell },
@@ -2517,7 +2710,7 @@ export default function App() {
   ], []);
 
   const allowedTabs = useMemo(() => {
-    if (userRole === 'ADMIN' || userRole === 'DEVELOPER') {
+    if (userRole === 'DEVELOPER' || isDeveloper) {
       return [
         'Executive Summary', 'Clinical Source', 'Staff Management', 'Content Management',
         'Communications / Alerts', 'Organization Settings',
@@ -2525,21 +2718,32 @@ export default function App() {
         'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
         'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
         'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
-        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
+        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
+      ];
+    }
+    if (userRole === 'ADMIN') {
+      return [
+        'Executive Summary', 'Clinical Source', 'Staff Management', 'Content Management',
+        'Communications / Alerts', 'Organization Settings',
+        'บุคลากร', 'ตั้งค่า', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การแจ้งเตือน',
+        'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
+        'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
+        'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
+        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
       ];
     }
     if (isPatient) {
-      // Patients are strictly limited to their own modules
-      return ['หน้าหลัก', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'Check-In', 'คิวอาร์ / เช็คอิน', 'QR', 'วิดีโอ', 'คู่มือ', 'คู่มือการใช้งาน', 'การแจ้งเตือน', 'โปรไฟล์', 'Before / After', 'การบ้านและ Progress', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'];
+      // Patients can also view the project documentation and philosophy
+      return ['หน้าหลัก', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'Check-In', 'คิวอาร์ / เช็คอิน', 'QR', 'วิดีโอ', 'คู่มือ', 'คู่มือการใช้งาน', 'Clinical Source', 'เอกสารสำคัญโครงการ', 'Project Dossier', 'การแจ้งเตือน', 'โปรไฟล์', 'Before / After', 'การบ้านและ Progress', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'];
     }
     // Medical Staff allowed tabs (Clinic Owner / Doctor / Assistant / Staff)
     return [
       'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'นัดหมาย', 'การแจ้งเตือน', 'ระบบ / โปรไฟล์', 'โปรไฟล์',
       'ติดตามผล', 'ติดตามการรักษา', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After', 'QR', 'Check-In',
-      'แบบฝึกหัดที่ได้รับมอบหมาย', 'รายงาน', 'Clinical Source', 'บุคลากร', 'Staff Management', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การบ้านและ Progress',
+      'แบบฝึกหัดที่ได้รับมอบหมาย', 'รายงาน', 'Clinical Source', 'เอกสารสำคัญโครงการ', 'Project Dossier', 'บุคลากร', 'Staff Management', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การบ้านและ Progress',
       'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
     ];
-  }, [userRole, isPatient]);
+  }, [userRole, isPatient, isDeveloper]);
 
   const getTabDisplayTitle = (tab: string) => {
     switch (tab) {
@@ -2583,7 +2787,10 @@ export default function App() {
       case 'User Management':
         return 'บุคลากร';
       case 'Clinical Source':
-        return 'Clinical Source';
+      case 'Project Dossier':
+      case 'เอกสารสำคัญโครงการ':
+      case 'เอกสารสำคัญโครงสร้างระบบ':
+        return '📁 เอกสารสำคัญโครงการ (Project Dossier)';
       case 'Executive Summary':
         return 'Executive Summary';
       default:
@@ -2682,8 +2889,15 @@ export default function App() {
     : logs, [isPatient, logs, assignedPatient?.id]);
 
   const scopedAppointments = useMemo(() => isPatient
-    ? (assignedPatient ? appointments.filter((a) => a.patientId === assignedPatient.id) : [])
-    : appointments, [isPatient, appointments, assignedPatient?.id]);
+    ? (assignedPatient 
+        ? appointments.filter((a) => 
+            a.patientId === assignedPatient.id || 
+            a.patientId === assignedPatient.hn || 
+            a.hn === assignedPatient.hn || 
+            (a as any).HN === assignedPatient.hn
+          ) 
+        : [])
+    : appointments, [isPatient, appointments, assignedPatient?.id, assignedPatient?.hn]);
 
   const scopedPatients = useMemo(() => isPatient
     ? (assignedPatient ? [assignedPatient] : [])
@@ -3074,17 +3288,19 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button type="button"
                 onClick={() => setShowLogoutConfirmModal(true)}
-                className="flex-1 flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 hover:text-rose-900 hover:bg-rose-100/70 border border-rose-300/40 transition-all cursor-pointer"
+                className={`${isDeveloper ? 'flex-1' : 'w-full'} flex items-center justify-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 hover:text-rose-900 hover:bg-rose-100/70 border border-rose-300/40 transition-all cursor-pointer`}
               >
                 <LogOut className="w-4 h-4 text-rose-600 shrink-0" />
                 <span className="leading-normal">ออกจากระบบ</span>
               </button>
-              <button type="button" onClick={handleGearClick}
-                className="p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-white/40 transition-colors cursor-pointer shrink-0"
-                title="การตั้งค่าระบบ (System Core)"
-              >
-                <SettingsIcon className="w-5 h-5" />
-              </button>
+              {isDeveloper && (
+                <button type="button" onClick={handleGearClick}
+                  className="p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-white/40 transition-colors cursor-pointer shrink-0"
+                  title="การตั้งค่าระบบ (Developer & Technical Settings)"
+                >
+                  <SettingsIcon className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -3188,7 +3404,7 @@ export default function App() {
 
         {/* Scrollable Content Area */}
         <main 
-          className="w-full flex flex-col gap-6 flex-1 relative box-border px-4 sm:px-6 md:px-8 pb-8 pt-2"
+          className="w-full flex flex-col gap-4 sm:gap-6 flex-1 relative box-border px-2 sm:px-4 md:px-6 pb-6 pt-2 text-base"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -3197,7 +3413,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="w-full max-w-full flex-1 box-border overflow-x-hidden flex flex-col gap-6"
+              className="w-full max-w-full flex-1 box-border overflow-x-hidden flex flex-col gap-4 sm:gap-6"
             >
           {activeTab === 'Dashboard' && !isPatient && (
             <Dashboard 
@@ -3295,6 +3511,8 @@ export default function App() {
                 if (subTab) setProfileSubTab(subTab);
                 setActiveTab(tab);
               }}
+              onRefresh={(showToast = true) => handleRefreshPatientsFromGoogleSheets(showToast)}
+              isLoading={isInitialDataLoading}
             />
           )}
 
@@ -3305,6 +3523,7 @@ export default function App() {
               onAddAppointment={handleAddAppointment}
               onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
               onDeleteAppointment={handleDeleteAppointment}
+              onUpdateAppointment={handleUpdateAppointment}
             />
           )}
 
@@ -3312,7 +3531,7 @@ export default function App() {
             <MediaLibraryHub userRole={userRole} onNavigate={setActiveTab} />
           )}
 
-          {(activeTab === 'Clinical Source' || activeTab === 'Project Dossier' || activeTab === 'เอกสารสำคัญโครงการ') && !isPatient && (
+          {(activeTab === 'Clinical Source' || activeTab === 'Project Dossier' || activeTab === 'เอกสารสำคัญโครงการ' || activeTab === 'เอกสารสำคัญโครงสร้างระบบ') && (
             <ClinicalSourceManager 
               sources={clinicalSourceDocuments}
               onUpdateSourceStatus={handleUpdateClinicalSourceStatus}
@@ -3333,7 +3552,7 @@ export default function App() {
 
           {activeTab === 'บุคลากร' && !isPatient && (
             <StaffManagement
-              staffAccounts={staffAccounts}
+              staffAccounts={staffAccounts.filter(s => !isDeveloperStaffAccount(s))}
               onAddStaff={handleAddStaff}
               onUpdateStaff={handleUpdateStaff}
               onDeleteStaff={handleDeleteStaff}
@@ -3459,7 +3678,7 @@ export default function App() {
           )}
 
           {activeTab === 'ตั้งค่า' && !isPatient && (
-            (userRole === 'DEVELOPER' || userRole === 'ADMIN') ? (
+            (userRole === 'DEVELOPER' || userRole === 'ADMIN' || userRole === 'DOCTOR' || userRole === 'CLINIC_OWNER' || isAdmin || (currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'DOCTOR' || currentUser.role === 'DEVELOPER' || currentUser.email === 'niramon7196@gmail.com' || currentUser.username?.toLowerCase().includes('niramon')))) ? (
               <SettingsPanel 
                 settings={settings}
                 onUpdateSettings={handleUpdateSettings}
@@ -3472,6 +3691,7 @@ export default function App() {
                 onAddStaff={handleAddStaff}
                 onBack={() => setActiveTab('Dashboard')}
                 onClose={() => setActiveTab('Dashboard')}
+                isDeveloperMode={false}
               />
             ) : (
               <div className="aurora-modal p-8 rounded-3xl max-w-md w-full mx-auto text-center space-y-4 my-auto">
@@ -3528,6 +3748,7 @@ export default function App() {
                 onUpdatePatientSleep={handleUpdatePatientSleep}
                 onUpdatePatientEfLog={handleUpdatePatientEfLog}
                 onCheckIn={handleCheckIn}
+                onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
               />
             ) : (
               <ProfileLoadingFallback isLoading={isInitialDataLoading} patients={patients} onAutoLink={handleAutoLinkSuccess} />
@@ -3572,33 +3793,6 @@ export default function App() {
         isOpen={showInceptionModal} 
         onClose={() => setShowInceptionModal(false)} 
       />
-
-      {/* ACCESS DENIED MODAL FOR SETTINGS */}
-      {showAccessDeniedModal && (
-        <div 
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
-          style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}
-        >
-          <div className="bg-white w-full max-w-sm mx-auto rounded-2xl p-6 shadow-2xl text-center space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto text-rose-600 shadow-xs border border-rose-200">
-              <ShieldCheck className="w-7 h-7 text-rose-600" />
-            </div>
-            <h2 className="text-xl font-bold text-slate-900 leading-tight">Access Denied</h2>
-            <p className="text-sm text-slate-600 leading-relaxed font-medium">
-              ไม่มีสิทธิ์เข้าถึง: ส่วนการกำหนดค่าเชิงโครงสร้างระบบนี้สงวนสิทธิ์เฉพาะผู้พัฒนาระบบ (System Developer) เท่านั้น เว้นแต่มีเอกสารสัญญาซื้อขายและส่งมอบกรรมสิทธิ์ Source Code เป็นลายลักษณ์อักษร
-            </p>
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setShowAccessDeniedModal(false)}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all cursor-pointer shadow-md"
-              >
-                ตกลง
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* WELCOME MODAL */}
       {showWelcomeModal && (
@@ -3782,10 +3976,10 @@ export default function App() {
               <button type="button" onClick={() => setShowSystemManager(false)} className="text-slate-300 hover:text-white text-sm font-semibold cursor-pointer px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-all">✕ ปิด</button>
             </div>
 
-            <div className="flex border-b border-slate-100 bg-slate-50 px-6 shrink-0">
+            <div className="flex border-b border-slate-100 bg-slate-50 px-6 shrink-0 overflow-x-auto">
               <button type="button"
                 onClick={() => setSystemManagerTab('settings')}
-                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   systemManagerTab === 'settings' || systemManagerTab === 'staff' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -3793,11 +3987,20 @@ export default function App() {
               </button>
               <button type="button"
                 onClick={() => setSystemManagerTab('permissions')}
-                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   systemManagerTab === 'permissions' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
                 ข้อมูลทางเทคนิค & Diagnostics
+              </button>
+              <button type="button"
+                onClick={() => setSystemManagerTab('documentation')}
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  systemManagerTab === 'documentation' ? 'border-indigo-600 text-indigo-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span>เอกสารสำคัญโครงสร้างระบบ (Documentation)</span>
               </button>
             </div>
 
@@ -3818,11 +4021,34 @@ export default function App() {
                   onAddStaff={handleAddStaff}
                   onBack={() => setShowSystemManager(false)}
                   onClose={() => setShowSystemManager(false)}
+                  isDeveloperMode={true}
+                  onNavigateToDocs={() => setSystemManagerTab('documentation')}
                 />
               )}
 
               {systemManagerTab === 'permissions' && (
                 <div className="space-y-5 text-left">
+                  {/* Quick Access to Technical Documentation */}
+                  <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-white rounded-2xl p-5 border border-purple-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">เอกสารสำคัญโครงสร้างระบบ (Technical Documentation Vault)</h4>
+                        <p className="text-xs text-slate-500">พิมพ์เขียวระบบ บันทึกสิทธิ์การส่งมอบ (Deed) และคู่มือส่งต่องานทางเทคนิค</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSystemManagerTab('documentation')}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto shadow-xs"
+                    >
+                      <span>เปิดดูเอกสาร</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
                   <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
                     <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -3857,7 +4083,7 @@ export default function App() {
                             <th className="py-2.5 px-3">Role</th>
                             <th className="py-2.5 px-3">View Scope</th>
                             <th className="py-2.5 px-3">Edit Scope</th>
-                            <th className="py-2.5 px-3">Developer Settings</th>
+                            <th className="py-2.5 px-3">Developer Settings & Docs</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -3865,13 +4091,13 @@ export default function App() {
                             <td className="py-2.5 px-3 font-bold text-slate-800">Developer / System Admin</td>
                             <td className="py-2.5 px-3 text-emerald-600 font-bold">✓ Full Access</td>
                             <td className="py-2.5 px-3 text-emerald-600 font-bold">✓ Full Access</td>
-                            <td className="py-2.5 px-3 text-emerald-600 font-bold">✓ Allowed (⚙️)</td>
+                            <td className="py-2.5 px-3 text-emerald-600 font-bold">✓ Allowed (⚙️ & Docs Vault)</td>
                           </tr>
                           <tr>
                             <td className="py-2.5 px-3 font-bold text-slate-800">Doctor / Assistant (หมอ/ผู้ช่วย)</td>
                             <td className="py-2.5 px-3 text-emerald-600 font-bold">✓ Clinic Portal & บุคลากร</td>
                             <td className="py-2.5 px-3 text-teal-700 font-bold">✓ Assigned Modules</td>
-                            <td className="py-2.5 px-3 text-rose-500 font-bold">✕ Technical Only</td>
+                            <td className="py-2.5 px-3 text-rose-500 font-bold">✕ Hidden from Sidebar</td>
                           </tr>
                           <tr>
                             <td className="py-2.5 px-3 font-bold text-slate-800">Patient / Caregiver (ผู้รับการดูแล)</td>
@@ -3882,6 +4108,46 @@ export default function App() {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {systemManagerTab === 'documentation' && (
+                <div className="space-y-4 text-left">
+                  <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 rounded-2xl border border-indigo-500/30 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                    <div>
+                      <span className="text-amber-400 text-xs font-extrabold flex items-center gap-1.5 uppercase tracking-wider">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Developer & Technical Architecture Vault
+                      </span>
+                      <h3 className="text-base font-bold text-white mt-0.5">
+                        เอกสารสำคัญโครงสร้างระบบและคู่มือส่งมอบงาน (Documentation & Handover)
+                      </h3>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        สงวนสิทธิ์เฉพาะผู้พัฒนาระบบ (System Developer / niramon7196@gmail.com) หรือผ่านหน้า Developer & Technical Settings เท่านั้น
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSystemManager(false);
+                        setActiveTab('Clinical Source');
+                      }}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto shadow-sm"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>เปิดเต็มหน้าจอ (Full Page)</span>
+                    </button>
+                  </div>
+                  <div className="rounded-2xl overflow-hidden bg-slate-950 p-1 border border-slate-800 shadow-xl min-h-[500px]">
+                    <ClinicalSourceManager 
+                      sources={clinicalSourceDocuments}
+                      onUpdateSourceStatus={handleUpdateClinicalSourceStatus}
+                      onAddSource={handleAddClinicalSource}
+                      userRole="developer"
+                      initialMainTab={dossierMainTab}
+                      onOpenInceptionModal={() => setShowInceptionModal(true)}
+                    />
                   </div>
                 </div>
               )}

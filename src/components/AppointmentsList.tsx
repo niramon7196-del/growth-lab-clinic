@@ -63,8 +63,9 @@ interface AppointmentsListProps {
   appointments: Appointment[];
   patients: Patient[];
   onAddAppointment: (appointment: Omit<Appointment, 'id' | 'patientName'>) => void;
-  onUpdateAppointmentStatus: (id: string, status: 'pending' | 'completed' | 'cancelled') => void;
+  onUpdateAppointmentStatus: (id: string, status: any, notes?: string) => void;
   onDeleteAppointment: (id: string) => void;
+  onUpdateAppointment?: (appointment: Appointment) => void;
 }
 
 export default function AppointmentsList({
@@ -73,6 +74,7 @@ export default function AppointmentsList({
   onAddAppointment,
   onUpdateAppointmentStatus,
   onDeleteAppointment,
+  onUpdateAppointment,
 }: AppointmentsListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
@@ -369,7 +371,7 @@ export default function AppointmentsList({
   };
 
   return (
-    <div id="appointments-view" className="space-y-6 text-left w-full max-w-full overflow-x-hidden box-border">
+    <div id="appointments-view" className="space-y-4 sm:space-y-6 text-left w-full max-w-full overflow-x-hidden box-border">
       
       {/* Toast Notification */}
       {notificationMsg && (
@@ -447,6 +449,8 @@ export default function AppointmentsList({
             setFormDate(dateStr);
             setShowAddModal(true);
           }}
+          onUpdateAppointmentStatus={onUpdateAppointmentStatus}
+          onUpdateAppointment={onUpdateAppointment}
         />
       </div>
 
@@ -566,15 +570,25 @@ export default function AppointmentsList({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredAppointments.map((app) => (
+          {filteredAppointments.map((app) => {
+            const isRescheduleRequested = app.status?.includes('Reschedule') || app.status?.includes('ขอเลื่อน') || app.status === 'reschedule_requested';
+            const isConfirmed = app.status?.includes('Confirmed') || app.status?.includes('ยืนยัน') || app.status === 'confirmed';
+            const isCompleted = app.status === 'completed' || app.status === 'เสร็จสิ้น';
+            const isCancelled = app.status === 'cancelled' || app.status === 'ยกเลิก';
+
+            return (
             <div 
               key={app.id}
               className={`p-5 rounded-2xl transition-all flex flex-col justify-between ${
-                app.status === 'pending'
-                  ? 'aurora-card'
-                  : app.status === 'completed'
+                isRescheduleRequested
+                  ? 'bg-amber-50/40 border-2 border-amber-300 ring-2 ring-amber-300/40 shadow-md'
+                  : isConfirmed
+                  ? 'aurora-card border-sky-300 ring-1 ring-sky-300/30'
+                  : isCompleted
                   ? 'aurora-card opacity-80'
-                  : 'bg-rose-50/20 border border-rose-100 opacity-60'
+                  : isCancelled
+                  ? 'bg-rose-50/20 border border-rose-100 opacity-60'
+                  : 'aurora-card'
               }`}
             >
               <div>
@@ -589,14 +603,34 @@ export default function AppointmentsList({
                     {app.type === 'clinical' ? 'คลินิก On-site' : app.type === 'online' ? 'วิดีโอคอล Online' : 'ปรึกษาทั่วไป'}
                   </span>
 
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    app.status === 'pending'
-                      ? 'bg-amber-50 text-amber-700'
-                      : app.status === 'completed'
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-rose-50 text-rose-700'
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                    isRescheduleRequested
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse font-black'
+                      : isConfirmed
+                      ? 'bg-sky-100 text-sky-800 border border-sky-200 font-bold'
+                      : isCompleted
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : isCancelled
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-blue-50 text-blue-700 border border-blue-200'
                   }`}>
-                    {app.status === 'pending' ? 'รอนัดหมาย' : app.status === 'completed' ? 'ตรวจสำเร็จ' : 'ยกเลิกแล้ว'}
+                    {isRescheduleRequested ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                        <span>⚠️ คนไข้แจ้งขอเลื่อนนัด</span>
+                      </>
+                    ) : isConfirmed ? (
+                      <>
+                        <span>✓</span>
+                        <span>ยืนยันมาตามนัดแล้ว</span>
+                      </>
+                    ) : isCompleted ? (
+                      'ตรวจสำเร็จ'
+                    ) : isCancelled ? (
+                      'ยกเลิกแล้ว'
+                    ) : (
+                      'รอนัดหมาย'
+                    )}
                   </span>
                 </div>
 
@@ -616,16 +650,22 @@ export default function AppointmentsList({
                   </div>
                 </div>
 
-                {/* Clinician Remarks */}
+                {/* Clinician Remarks or Reschedule Reason */}
                 {(() => {
                   const cleanNotes = getCleanNotes(app.notes);
                   if (!cleanNotes) return null;
                   return (
-                    <div className="mt-3">
-                      <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
-                        บันทึกตรวจติดตามผล:
+                    <div className={`mt-3 p-2.5 rounded-xl border text-xs ${
+                      isRescheduleRequested
+                        ? 'bg-amber-100/80 border-amber-300 text-amber-950 font-medium'
+                        : 'bg-slate-50 border-slate-100 text-slate-600'
+                    }`}>
+                      <span className={`text-[10px] font-bold block uppercase tracking-wider mb-1 ${
+                        isRescheduleRequested ? 'text-amber-900 font-black' : 'text-slate-400'
+                      }`}>
+                        {isRescheduleRequested ? '📌 ข้อความแจ้งขอเลื่อนนัดจากคนไข้:' : 'บันทึกตรวจติดตามผล:'}
                       </span>
-                      <p className="text-slate-600 text-xs mt-1 leading-relaxed line-clamp-3">
+                      <p className="leading-relaxed line-clamp-4">
                         {cleanNotes}
                       </p>
                     </div>
@@ -682,7 +722,7 @@ export default function AppointmentsList({
 
                 {/* Right side actions: Status toggles */}
                 <div className="flex items-center gap-1.5">
-                  {app.status === 'pending' && (
+                  {(app.status === 'pending' || isRescheduleRequested || isConfirmed) && (
                     <>
                       <button
                         type="button"
@@ -707,8 +747,9 @@ export default function AppointmentsList({
                 </div>
               </div>
             </div>
-          ))
-          }</div>
+            );
+          })}
+          </div>
         )}
       </div>
 

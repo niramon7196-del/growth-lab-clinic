@@ -87,7 +87,7 @@ export const authService = {
     return false;
   },
 
-  login: (role: UserRole, patientId?: string, customName?: string, customPermissions?: { [key: string]: boolean }, username?: string): UserAccount => {
+  login: (role: UserRole, patientId?: string, customName?: string, customPermissions?: { [key: string]: boolean }, username?: string, email?: string): UserAccount => {
     // Initiate Firebase Anonymous Auth session asynchronously
     if (isFirebaseConfigured && auth && !auth.currentUser) {
       signInAnonymously(auth).catch((err) => {
@@ -123,6 +123,8 @@ export const authService = {
       defaultUsername = 'patient_user';
     }
 
+    const resolvedEmail = email || (username?.includes('@') ? username : (role === 'DEVELOPER' || username === 'dev' ? 'niramon7196@gmail.com' : undefined));
+
     const user: UserAccount = {
       id: `usr_${Date.now()}`,
       username: username || defaultUsername,
@@ -130,6 +132,7 @@ export const authService = {
       patientId: role === 'PATIENT' ? patientId : undefined,
       hn: role === 'PATIENT' ? (username || patientId) : undefined,
       name,
+      email: resolvedEmail,
       permissions: customPermissions
     };
     if (role === 'PATIENT' && (username || patientId)) {
@@ -183,7 +186,9 @@ export const authService = {
       if (!user) {
         return null;
       }
-      // Remove the renaming logic that forces user name to 'ผู้ดูแลระบบ'
+      if ((user.role === 'DEVELOPER' || user.username === 'dev') && !user.email) {
+        user.email = 'niramon7196@gmail.com';
+      }
       return user;
     } catch (e) {
       return null;

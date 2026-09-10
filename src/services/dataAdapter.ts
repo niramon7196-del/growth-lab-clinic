@@ -1479,18 +1479,38 @@ export const dataAdapter = {
     try {
       const gsApps = await fetchAppointmentsFromGoogleSheets();
       if (gsApps && Array.isArray(gsApps) && gsApps.length > 0) {
-        const normalized: Appointment[] = gsApps.map((a: any, idx: number) => ({
-          id: a.id || a.appointmentId || `appt_${idx}_${Date.now()}`,
-          patientId: a.patientId || a.hn || '',
-          patientName: a.patientName || a.name || 'ผู้รับการดูแล',
-          date: a.date || new Date().toISOString().split('T')[0],
-          time: a.time || '10:00',
-          type: a.type || 'clinical',
-          notes: a.notes || '',
-          status: a.status || 'pending',
-          googleCalendarEventId: a.googleCalendarEventId || a.googleCalendarEventID || a.eventId || undefined,
-          googleCalendarHtmlLink: a.googleCalendarHtmlLink
-        }));
+        const normalized: Appointment[] = gsApps.map((a: any, idx: number) => {
+          const rawStatus = (a.Status || a.status || '').toString().trim();
+          let mappedStatus: any = 'pending';
+          if (rawStatus.includes('Reschedule') || rawStatus.includes('ขอเลื่อน') || rawStatus === 'reschedule_requested') {
+            mappedStatus = 'Reschedule Requested (ขอเลื่อน)';
+          } else if (rawStatus.includes('Confirmed') || rawStatus.includes('ยืนยัน') || rawStatus === 'confirmed') {
+            mappedStatus = 'Confirmed (ยืนยันแล้ว)';
+          } else if (rawStatus === 'รอตรวจ' || rawStatus === 'นัดหมาย' || rawStatus === 'pending') {
+            mappedStatus = 'pending';
+          } else if (rawStatus === 'เสร็จสิ้น' || rawStatus === 'completed') {
+            mappedStatus = 'completed';
+          } else if (rawStatus === 'ยกเลิก' || rawStatus === 'cancelled') {
+            mappedStatus = 'cancelled';
+          } else if (rawStatus) {
+            mappedStatus = rawStatus;
+          }
+
+          return {
+            id: a.ID || a.id || a.appointmentId || `appt_${idx}_${Date.now()}`,
+            patientId: a.HN || a.hn || a.patientId || '',
+            patientName: a.PatientName || a.patientName || a.name || 'ผู้รับการดูแล',
+            hn: a.HN || a.hn || a.patientId || '',
+            date: a.Date || a.date || new Date().toISOString().split('T')[0],
+            time: a.Time || a.time || '10:00',
+            type: a.Type || a.type || 'clinical',
+            dentistName: a.Doctor || a.doctor || a.dentistName || 'ทันตแพทย์หญิง นภาพร วรรณษา',
+            notes: a.Notes || a.notes || '',
+            status: mappedStatus,
+            googleCalendarEventId: a.googleCalendarEventId || a.googleCalendarEventID || a.eventId || undefined,
+            googleCalendarHtmlLink: a.googleCalendarHtmlLink
+          };
+        });
         localStorage.setItem(LOCAL_STORAGE_APPS_KEY, JSON.stringify(normalized));
         return normalized;
       }

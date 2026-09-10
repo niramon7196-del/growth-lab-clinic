@@ -155,48 +155,48 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
   // Categories for Architecture & Successor Guide
   const archCategories = [
     { id: 1, title: 'ที่มาโครงการจากเก้าอี้ทำฟัน', icon: Sparkles },
-    { id: 2, title: 'ไทม์ไลน์การแก้ปัญหา Day 1', icon: Clock },
-    { id: 3, title: 'สถาปัตยกรรม Hybrid Cloud', icon: Server },
-    { id: 4, title: 'คุณค่าซอร์สโค้ดและ 5 เสาหลัก', icon: Cpu },
+    { id: 2, title: 'ไทม์ไลน์การแก้ปัญหาตั้งแต่วันแรก', icon: Clock },
+    { id: 3, title: 'โครงสร้างระบบจัดการ', icon: Server },
+    { id: 4, title: 'ระบบจัดการและ 5 เสาหลัก', icon: Cpu },
     { id: 5, title: 'รายการส่งมอบ 5 เสาหลัก', icon: Layers },
-    { id: 6, title: 'คู่มือส่งต่องานทางเทคนิค', icon: Code }
+    { id: 6, title: 'คู่มือการใช้งานทั่วไป', icon: HelpCircle }
   ];
 
   const handoverChecklist = [
     {
       id: 'doc-1',
-      title: 'Growth Nutrition Score (GNS)',
-      type: 'โภชนาการ (Nutrition Engine)',
+      title: 'แบบประเมินโภชนาการ',
+      type: 'โภชนาการกระตุ้นการเจริญเติบโต',
       status: 'VERIFIED & IMPLEMENTED',
-      details: 'ระบบประเมินโภชนาการ 10 ข้อ แยกหมวดกระตุ้น Growth-Promoting และ Growth-Inhibiting สรุปเกรด A/B/C'
+      details: 'ระบบประเมินโภชนาการ 10 ข้อ แยกหมวดอาหารที่กระตุ้นและอาหารที่ขัดขวางการเจริญเติบโต พร้อมสรุปผลแบบอัตโนมัติ'
     },
     {
       id: 'doc-2',
-      title: 'Sleep Assessment & EF Log',
-      type: 'การนอนหลับ & EF Trainer',
+      title: 'บันทึกการนอนหลับและการใส่อุปกรณ์',
+      type: 'การนอนหลับ & การใส่อุปกรณ์',
       status: 'VERIFIED & IMPLEMENTED',
-      details: 'ระบบปฏิทิน 31 วัน บันทึกการสวมใส่ EF Trainer และคัดกรองพฤติกรรมการนอนหลับ'
+      details: 'ระบบปฏิทิน 31 วัน บันทึกความสม่ำเสมอการสวมใส่อุปกรณ์ และประเมินคุณภาพการนอนหลับ'
     },
     {
       id: 'doc-3',
-      title: 'Exercise & Movement Protocol',
+      title: 'รูปแบบการออกกำลังกายและปรับท่าทาง',
       type: 'การออกกำลังกาย & ปรับท่าทาง',
       status: 'VERIFIED & IMPLEMENTED',
-      details: 'แบบประเมินและคลังวิดีโอสาธิตท่าทาง Wall Stand, Bone Loading Jump, Core Stability'
+      details: 'แบบประเมินและคลังวิดีโอสาธิตท่าทางการออกกำลังกายที่ถูกต้อง'
     },
     {
       id: 'doc-4',
-      title: 'Orofacial Myofunctional Therapy (OMT)',
+      title: 'การฝึกกล้ามเนื้อช่องปาก',
       type: 'การฝึกกล้ามเนื้อช่องปาก',
       status: 'VERIFIED & IMPLEMENTED',
       details: 'ระบบติดตามการฝึกกล้ามเนื้อริมฝีปาก ลิ้น และการกลืนตามหลักวิทยาศาสตร์ทันตกรรม'
     },
     {
       id: 'doc-5',
-      title: 'Red Flag Warning & Cascading Delete',
+      title: 'ระบบแจ้งเตือนและคัดกรองความปลอดภัย',
       type: 'ความปลอดภัย & การคัดกรอง',
       status: 'VERIFIED & IMPLEMENTED',
-      details: 'การแจ้งเตือนเคสเสี่ยงหยุดหายใจขณะหลับ ขาดการฝึก 7 วัน และระบบยกเลิกสิทธิ์ QR Token ถาวร'
+      details: 'การแจ้งเตือนเคสเสี่ยงหยุดหายใจขณะหลับ ขาดการฝึก 7 วัน และระบบยกเลิกสิทธิ์ผู้ใช้ถาวร'
     }
   ];
 
@@ -220,13 +220,13 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-200 text-[10px] font-black tracking-widest border border-amber-400/30 uppercase mb-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Project Dossier & System Handover</span>
+                  <span>เอกสารโครงการ</span>
                 </div>
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                  เอกสารสำคัญโครงการ (Project Dossier & Handover)
+                  เอกสารสำคัญโครงการและการส่งมอบระบบ
                 </h1>
                 <p className="text-xs text-slate-300 font-medium">
-                  Growth Lab Clinical Intelligence Platform v1.0 — เอกสารสิทธิ์สถาปัตยกรรมและข้อตกลงส่งมอบระบบ
+                  แพลตฟอร์มคลินิกอัจฉริยะ v1.0 — เอกสารสิทธิ์สถาปัตยกรรมและข้อตกลงส่งมอบระบบ
                 </p>
               </div>
             </div>
@@ -279,10 +279,10 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
               </div>
               <div className="overflow-hidden">
                 <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-300/80 block">
-                  หน้าที่ 1 • Tab 1
+                  หน้าที่ 1
                 </span>
                 <span className={`font-black text-xs sm:text-sm block truncate ${mainTab === 'deed' ? 'text-white' : 'text-slate-300'}`}>
-                  บันทึกข้อตกลงและสิทธิ์การส่งมอบระบบ (IP & Deed)
+                  บันทึกข้อตกลงและสิทธิ์การส่งมอบระบบ
                 </span>
               </div>
             </button>
@@ -303,10 +303,10 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
               </div>
               <div className="overflow-hidden">
                 <span className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300/80 block">
-                  หน้าที่ 2 • Tab 2
+                  หน้าที่ 2
                 </span>
                 <span className={`font-black text-xs sm:text-sm block truncate ${mainTab === 'architecture' ? 'text-white' : 'text-slate-300'}`}>
-                  สถาปัตยกรรมระบบและคู่มือส่งต่องาน (Architecture & Guide)
+                  สถาปัตยกรรมระบบและคู่มือส่งต่องาน
                 </span>
               </div>
             </button>
@@ -324,9 +324,9 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 text-[10px] font-black uppercase tracking-wider border border-amber-400/30">
               <KeyRound className="w-3.5 h-3.5 text-amber-300" />
-              <span>Protected Executive Chamber</span>
+              <span>พื้นที่สงวนสิทธิ์</span>
             </div>
-            <h2 className="text-xl font-black text-white">ล็อกการเข้าถึงหน้านี้ด้วย PIN</h2>
+            <h2 className="text-xl font-black text-white">ล็อกการเข้าถึงหน้านี้ด้วยรหัสผ่าน</h2>
             <p className="text-xs text-slate-300 max-w-xs mx-auto">
               กรุณากรอกรหัส PIN 4 หลักเพื่อเปิดอ่านเอกสารสำคัญสิทธิ์ระบบโครงการ (รหัสเริ่มต้น: <strong className="text-amber-300">1234</strong>)
             </p>
@@ -379,95 +379,95 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
             <div className="space-y-6 animate-in fade-in duration-300">
               
               {/* OFFICIAL HANDOVER CERTIFICATE CARD */}
-              <div className="bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 rounded-3xl p-6 sm:p-10 border-2 border-amber-400/50 shadow-2xl text-white space-y-8 relative overflow-hidden print:border-slate-800 print:bg-white print:text-slate-900">
+              <div className="bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 rounded-3xl p-5 sm:p-8 border-2 border-amber-400/50 shadow-2xl text-white space-y-6 relative overflow-hidden print:border-slate-800 print:bg-white print:text-slate-900">
                 
                 {/* Background Decorative Crest / Watermark */}
                 <div className="absolute -top-10 -right-10 w-72 h-72 bg-amber-400/10 rounded-full blur-3xl pointer-events-none print:hidden" />
                 
                 {/* 1. Certificate Header Badge & Seal */}
-                <div className="text-center space-y-4 border-b border-amber-500/20 pb-6 relative z-10 print:border-slate-300">
+                <div className="text-center space-y-4 border-b border-amber-500/20 pb-5 relative z-10 print:border-slate-300">
                   <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-amber-500/20 border border-amber-400/50 px-4 py-1.5 rounded-full text-xs font-black text-amber-300 uppercase tracking-widest shadow-inner print:bg-amber-100 print:text-amber-900 print:border-amber-300">
                     <Award className="w-4 h-4 text-amber-300 print:text-amber-700" />
-                    <span>OFFICIAL SYSTEM HANDOVER CERTIFICATE</span>
+                    <span>ใบรับรองการส่งมอบระบบ</span>
                   </div>
 
                   <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-300 to-yellow-100 tracking-tight print:text-slate-900 print:bg-none">
                     ใบรับรองการส่งมอบระบบอย่างเป็นทางการ
                   </h2>
 
-                  <p className="text-xs sm:text-sm text-slate-300 font-medium max-w-xl mx-auto print:text-slate-600">
+                  <p className="text-sm sm:text-base text-slate-300 font-medium max-w-xl mx-auto print:text-slate-600">
                     เอกสารสำคัญแสดงการส่งมอบทรัพย์สินทางปัญญา ซอร์สโค้ด และสิทธิ์การใช้งานแอปพลิเคชัน
                   </p>
                 </div>
 
                 {/* 2. Official Handover Summary Card Grid (5 Key Specs) */}
-                <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 sm:p-8 space-y-5 relative z-10 shadow-lg print:bg-slate-50 print:border-slate-300 print:text-slate-900">
-                  <div className="flex items-center gap-2.5 text-amber-300 font-black text-sm uppercase tracking-wider border-b border-white/10 pb-3 print:text-amber-800 print:border-slate-200">
+                <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-5 sm:p-6 space-y-5 relative z-10 shadow-lg print:bg-slate-50 print:border-slate-300 print:text-slate-900">
+                  <div className="flex items-center gap-2.5 text-amber-300 font-black text-sm sm:text-base uppercase tracking-wider border-b border-white/10 pb-3 print:text-amber-800 print:border-slate-200">
                     <ShieldCheck className="w-5 h-5 text-amber-400" />
-                    <h3>รายละเอียดข้อมูลการส่งมอบระบบ (System Delivery Credentials)</h3>
+                    <h3>รายละเอียดข้อมูลการส่งมอบระบบ</h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 text-xs sm:text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 text-sm sm:text-base">
                     
                     {/* Project Name */}
                     <div className="p-4 bg-black/40 rounded-xl border border-amber-400/20 space-y-1 md:col-span-2 print:bg-white print:border-slate-200">
-                      <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider block print:text-amber-700">
-                        • ชื่อโครงการ (Project Title)
+                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider block print:text-amber-700">
+                        • ชื่อโครงการ
                       </span>
-                      <p className="text-base sm:text-lg font-black text-white print:text-slate-900">
-                        Growth Lab Clinical Growth Intelligence Platform v1.0
+                      <p className="text-lg sm:text-xl font-black text-white print:text-slate-900">
+                        แพลตฟอร์มคลินิกอัจฉริยะเพื่อการเจริญเติบโต v1.0
                       </p>
                     </div>
 
                     {/* Creator & IP Owner */}
                     <div className="p-4 bg-black/40 rounded-xl border border-amber-400/20 space-y-1 print:bg-white print:border-slate-200">
-                      <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider block print:text-amber-700">
-                        • ผู้สร้างสรรค์และเจ้าของสิทธิ์ (Creator & IP Owner)
+                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider block print:text-amber-700">
+                        • ผู้สร้างสรรค์และเจ้าของสิทธิ์
                       </span>
-                      <p className="text-sm sm:text-base font-extrabold text-white print:text-slate-900">
+                      <p className="text-base sm:text-lg font-extrabold text-white print:text-slate-900">
                         คุณนิรมล เลิศล้ำ
                       </p>
-                      <p className="text-xs text-slate-300 font-medium print:text-slate-600">
-                        Lead System Architect & IP Owner
+                      <p className="text-sm text-slate-300 font-medium print:text-slate-600">
+                        ผู้ออกแบบสถาปัตยกรรมระบบ
                       </p>
                     </div>
 
                     {/* AI Partner */}
                     <div className="p-4 bg-black/40 rounded-xl border border-purple-400/20 space-y-1 print:bg-white print:border-slate-200">
-                      <span className="text-[11px] font-black text-purple-300 uppercase tracking-wider block print:text-purple-700">
-                        • พันธมิตรสถาปัตยกรรมร่วมพัฒนา (Co-Engineering Partner)
+                      <span className="text-xs font-black text-purple-300 uppercase tracking-wider block print:text-purple-700">
+                        • พันธมิตรสถาปัตยกรรมร่วมพัฒนา
                       </span>
-                      <p className="text-sm sm:text-base font-extrabold text-white print:text-slate-900">
-                        Gemini Spark Engine
+                      <p className="text-base sm:text-lg font-extrabold text-white print:text-slate-900">
+                        Google Gemini
                       </p>
-                      <p className="text-xs text-slate-300 font-medium print:text-slate-600">
-                        AI Co-Engineering Partner
+                      <p className="text-sm text-slate-300 font-medium print:text-slate-600">
+                        ปัญญาประดิษฐ์ผู้ช่วยพัฒนา
                       </p>
                     </div>
 
                     {/* Licensee Clinic */}
                     <div className="p-4 bg-black/40 rounded-xl border border-emerald-400/20 space-y-1 print:bg-white print:border-slate-200">
-                      <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider block print:text-emerald-700">
-                        • ผู้รับมอบสิทธิ์การใช้งาน (Licensee)
+                      <span className="text-xs font-black text-emerald-400 uppercase tracking-wider block print:text-emerald-700">
+                        • ผู้รับมอบสิทธิ์การใช้งาน
                       </span>
-                      <p className="text-sm sm:text-base font-extrabold text-white print:text-slate-900">
+                      <p className="text-base sm:text-lg font-extrabold text-white print:text-slate-900">
                         คลินิกทันตกรรมภาสุข
                       </p>
-                      <p className="text-xs text-slate-300 font-medium print:text-slate-600">
-                        Internal Non-Exclusive Clinic License
+                      <p className="text-sm text-slate-300 font-medium print:text-slate-600">
+                        สิทธิ์การใช้งานภายในคลินิก
                       </p>
                     </div>
 
                     {/* Delivery Date */}
                     <div className="p-4 bg-black/40 rounded-xl border border-amber-400/20 space-y-1 print:bg-white print:border-slate-200">
-                      <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider block print:text-amber-700">
-                        • วันที่ส่งมอบระบบ (Handover Date)
+                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider block print:text-amber-700">
+                        • วันที่ส่งมอบระบบ
                       </span>
-                      <p className="text-sm sm:text-base font-extrabold text-white print:text-slate-900">
+                      <p className="text-base sm:text-lg font-extrabold text-white print:text-slate-900">
                         2 กันยายน พ.ศ. 2569
                       </p>
-                      <p className="text-xs text-slate-300 font-medium print:text-slate-600">
-                        Official Delivery Completion Date
+                      <p className="text-sm text-slate-300 font-medium print:text-slate-600">
+                        วันที่ดำเนินการส่งมอบเสร็จสมบูรณ์
                       </p>
                     </div>
 
@@ -482,42 +482,42 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                     href="https://docs.google.com/document/d/1DbUSgaU0FI3BKbi8SJnt1xrahNw3J38mydAAjzRCwYk/preview"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 p-4 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 text-white font-black text-xs sm:text-sm shadow-xl transition-all border border-purple-400/40 flex items-center justify-center gap-3 cursor-pointer group active:scale-95 no-underline"
+                    className="flex-1 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 text-white font-black text-xs sm:text-sm shadow-xl transition-all border border-purple-400/40 flex items-center justify-center gap-3 cursor-pointer group active:scale-95 no-underline"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                      <FileText className="w-5 h-5 text-amber-300" />
+                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                      <FileText className="w-6 h-6 text-amber-300" />
                     </div>
                     <div className="text-left">
-                      <span className="block font-black text-amber-300 text-[10px] uppercase tracking-wider">Official Live Document</span>
-                      <span className="block font-extrabold text-white sm:text-base">📄 เปิดอ่าน / ดาวน์โหลดเอกสารโครงการฉบับล่าสุด (Official Handover Dossier)</span>
+                      <span className="block font-black text-amber-300 text-[11px] uppercase tracking-wider">เอกสารฉบับจริง</span>
+                      <span className="block font-extrabold text-white sm:text-base">📄 เปิดอ่าน / ดาวน์โหลดเอกสารโครงการฉบับสมบูรณ์</span>
                     </div>
-                    <ExternalLink className="w-4 h-4 text-purple-200 ml-auto" />
+                    <ExternalLink className="w-5 h-5 text-purple-200 ml-auto" />
                   </a>
 
                   {/* Print / Download PDF */}
                   <button
                     type="button"
                     onClick={handlePrint}
-                    className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl transition-all border border-amber-300/60 flex items-center justify-center gap-3 cursor-pointer group active:scale-95 shrink-0"
+                    className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl transition-all border border-amber-300/60 flex items-center justify-center gap-3 cursor-pointer group active:scale-95 shrink-0"
                   >
-                    <div className="w-8 h-8 rounded-xl bg-slate-950/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                      <Printer className="w-4 h-4 text-slate-950" />
+                    <div className="w-10 h-10 rounded-xl bg-slate-950/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                      <Printer className="w-6 h-6 text-slate-950" />
                     </div>
                     <div className="text-left">
-                      <span className="block font-black text-slate-900/80 text-[10px] uppercase tracking-wider">Official Print & PDF</span>
-                      <span className="block font-extrabold text-slate-950">🖨 พิมพ์ / ดาวน์โหลด PDF</span>
+                      <span className="block font-black text-slate-900/80 text-[11px] uppercase tracking-wider">เอกสารสำหรับการพิมพ์</span>
+                      <span className="block font-extrabold text-slate-950 sm:text-base">🖨 พิมพ์ / ดาวน์โหลด PDF</span>
                     </div>
                   </button>
 
                 </div>
 
                 {/* 4. OFFICIAL SIGN-OFF CHAMBER (ช่องลงนามรับมอบ 2 ฝั่ง) */}
-                <div className="bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 border-2 border-amber-400/30 rounded-2xl p-6 sm:p-8 space-y-6 relative z-10 print:bg-white print:border-slate-300 print:text-slate-900">
+                <div className="bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 border-2 border-amber-400/30 rounded-2xl p-5 sm:p-8 space-y-6 relative z-10 print:bg-white print:border-slate-300 print:text-slate-900">
                   
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-400/20 pb-4 print:border-slate-200">
-                    <div className="flex items-center gap-2 text-amber-300 font-black text-base print:text-amber-900">
+                    <div className="flex items-center gap-2 text-amber-300 font-black text-lg print:text-amber-900">
                       <UserCheck className="w-6 h-6 text-amber-400 print:text-amber-700" />
-                      <h3>ช่องลงนามรับมอบระบบทางการ (Official Handover Sign-Off Chamber)</h3>
+                      <h3>ช่องลงนามรับมอบระบบทางการ</h3>
                     </div>
 
                     <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
@@ -525,7 +525,7 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 print:bg-emerald-100 print:text-emerald-800' 
                         : 'bg-amber-500/20 text-amber-200 border-amber-400/40 print:bg-amber-100 print:text-amber-800'
                     }`}>
-                      {isSigned ? '✓ Officially Signed & Verified' : 'Pending Sign-Off'}
+                      {isSigned ? '✓ ลงนามเสร็จสมบูรณ์' : 'รอการลงนาม'}
                     </span>
                   </div>
 
@@ -536,19 +536,19 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                     <div className="bg-black/50 p-6 rounded-2xl border border-amber-400/30 space-y-4 flex flex-col justify-between print:bg-white print:border-slate-300">
                       <div className="space-y-3">
                         <span className="px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[10px] font-black uppercase tracking-wider inline-block print:bg-amber-100 print:text-amber-800">
-                          ฝั่งผู้ส่งมอบ (Grantor & Lead Architect)
+                          ฝั่งผู้ส่งมอบ
                         </span>
 
                         <div className="pt-2 border-b border-white/10 pb-3 print:border-slate-200">
                           <p className="text-xs text-slate-400 font-medium">ชื่อ-นามสกุล:</p>
                           <h4 className="text-lg font-black text-white print:text-slate-900">คุณนิรมล เลิศล้ำ</h4>
                           <p className="text-xs text-amber-300 font-bold print:text-amber-800">
-                            Lead System Architect & Intellectual Property Owner
+                            ผู้ออกแบบสถาปัตยกรรมระบบ
                           </p>
                         </div>
 
                         <div className="space-y-1 text-xs text-slate-300 print:text-slate-600">
-                          <p>• ผู้ถือครองสิทธิ์สถาปัตยกรรมระบบและซอร์สโค้ด</p>
+                          <p>• ผู้ถือครองสิทธิ์สถาปัตยกรรมระบบ</p>
                           <p>• ผู้ลงนามส่งมอบสิทธิ์การใช้งานแอปพลิเคชัน</p>
                         </div>
                       </div>
@@ -572,7 +572,7 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                     <div className="bg-black/50 p-6 rounded-2xl border border-emerald-400/30 space-y-4 flex flex-col justify-between print:bg-white print:border-slate-300">
                       <div className="space-y-3">
                         <span className="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[10px] font-black uppercase tracking-wider inline-block print:bg-emerald-100 print:text-emerald-800">
-                          ฝั่งผู้รับมอบ (Recipient & Clinic Licensee)
+                          ฝั่งผู้รับมอบ
                         </span>
 
                         <div className="pt-2 border-b border-white/10 pb-3 print:border-slate-200">
@@ -630,7 +630,7 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                             className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
                           >
                             <UserCheck className="w-4 h-4 text-slate-950" />
-                            <span>ลงนามรับมอบระบบ (Sign Handover Deed)</span>
+                            <span>ลงนามรับมอบระบบ</span>
                           </button>
                         </form>
                       )}
@@ -646,7 +646,7 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                       <KeyRound className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-white text-xs">ระบบล็อกความปลอดภัยด้วยรหัส PIN (PIN Access Lock)</h4>
+                      <h4 className="font-bold text-white text-xs">ระบบล็อกความปลอดภัยด้วยรหัส PIN</h4>
                       <p className="text-slate-400 text-[11px]">
                         {isPinLockEnabled 
                           ? 'เปิดการล็อก PIN (1234) เพื่อป้องกันผู้ไม่ได้รับอนุญาตเปิดดู' 
@@ -718,12 +718,12 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className="flex items-center gap-3 text-purple-700 font-black text-xl border-b border-purple-100 pb-3">
                       <Sparkles className="w-6 h-6 text-purple-700" />
-                      <h3>หมวดที่ 1: ที่มาโครงการจากเก้าอี้ทำฟัน (Origin & Frontline Vision)</h3>
+                      <h3>หมวดที่ 1: ที่มาโครงการจากเก้าอี้ทำฟัน</h3>
                     </div>
 
                     <div className="space-y-4 text-slate-700 leading-relaxed text-sm">
                       <p>
-                        <strong>โครงการ Growth Lab Intelligence Platform</strong> เกิดขึ้นจากเจตนารมณ์ในการแก้ปัญหาจริงจากข้างเก้าอี้ทำฟัน (Frontline Dental Chair) โดยทันตแพทย์จัดฟันและทีมงานคลินิก ที่เผชิญกับอุปสรรคของการติดตามผลการรักษาการปรับโครงสร้างใบหน้า ระบบกล้ามเนื้อช่องปาก (Orofacial Myofunctional Therapy - OMT) การใส่อุปกรณ์ EF Trainer โภชนาการ (Growth Nutrition Score - GNS) และการออกกำลังกายกระตุ้นโกรทฮอร์โมนของเด็ก
+                        <strong>โครงการแพลตฟอร์มคลินิกอัจฉริยะ</strong> เกิดขึ้นจากเจตนารมณ์ในการแก้ปัญหาจริงจากข้างเก้าอี้ทำฟัน โดยทันตแพทย์จัดฟันและทีมงานคลินิก ที่เผชิญกับอุปสรรคของการติดตามผลการรักษาการปรับโครงสร้างใบหน้า ระบบกล้ามเนื้อช่องปาก การใส่อุปกรณ์ EF Trainer โภชนาการ และการออกกำลังกายกระตุ้นการเจริญเติบโตของเด็ก
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -733,7 +733,7 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                             การเปลี่ยนคำแนะนำทางการแพทย์สู่ขั้นตอนปฏิบัติจริง
                           </h4>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            คำแนะนำทางการแพทย์มักถูกลืมเมื่อคนไข้กลับบ้าน Growth Lab จึงแปลงคำสั่งแพทย์เป็นปฏิทินบันทึก 31 วัน แบบฟอร์ม GNS 10 ข้อ และวิดีโอสาธิตท่าฝึก เพื่อให้ผู้ปกครองและเด็กทำตามได้ง่ายและต่อเนื่อง
+                            คำแนะนำทางการแพทย์มักถูกลืมเมื่อคนไข้กลับบ้าน แพลตฟอร์มจึงแปลงคำสั่งแพทย์เป็นปฏิทินบันทึก 31 วัน แบบฟอร์ม 10 ข้อ และวิดีโอสาธิตท่าฝึก เพื่อให้ผู้ปกครองและเด็กทำตามได้ง่ายและต่อเนื่อง
                           </p>
                         </div>
 
@@ -756,52 +756,52 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className="flex items-center gap-3 text-indigo-700 font-black text-xl border-b border-indigo-100 pb-3">
                       <Clock className="w-6 h-6 text-indigo-700" />
-                      <h3>หมวดที่ 2: ไทม์ไลน์การแก้ปัญหา Day 1 (Day 1 Troubleshooting Log)</h3>
+                      <h3>หมวดที่ 2: ไทม์ไลน์การแก้ปัญหาตั้งแต่วันแรก</h3>
                     </div>
 
                     <div className="space-y-4 text-slate-700 text-sm">
                       <p>
-                        ย้อนรอยไทม์ไลน์พัฒนาการของระบบ Growth Lab จากจุดเริ่มต้นการแก้ปัญหาความยุ่งยากของเอกสารกระดาษ สู่อัลกอริทึมดิจิทัลสมบูรณ์แบบ:
+                        ย้อนรอยไทม์ไลน์พัฒนาการของระบบจากจุดเริ่มต้นการแก้ปัญหาความยุ่งยากของเอกสารกระดาษ สู่ระบบดิจิทัลสมบูรณ์แบบ:
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                           <span className="text-[10px] font-black uppercase text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md">
-                            Phase 1 • Day 1
+                            ระยะที่ 1 • วันแรก
                           </span>
-                          <h4 className="font-bold text-slate-900 text-sm">แปลงเกณฑ์ GNS 10 ข้อ สู่ระบบดิจิทัล</h4>
+                          <h4 className="font-bold text-slate-900 text-sm">แปลงเกณฑ์โภชนาการ 10 ข้อ สู่ระบบดิจิทัล</h4>
                           <p className="text-xs text-slate-600">
-                            ออกแบบสูตรคำนวณโภชนาการกระตุ้นโกรทฮอร์โมน (Growth-Promoting) และอาหารขัดขวาง (Growth-Inhibiting) สรุปผลเกรด A/B/C อัตโนมัติ
+                            ออกแบบสูตรคำนวณโภชนาการกระตุ้นการเจริญเติบโต และอาหารขัดขวาง สรุปผลอัตโนมัติ
                           </p>
                         </div>
 
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                           <span className="text-[10px] font-black uppercase text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
-                            Phase 2
+                            ระยะที่ 2
                           </span>
-                          <h4 className="font-bold text-slate-900 text-sm">ระบบปฏิทินสวมใส่ EF Trainer 31 วัน</h4>
+                          <h4 className="font-bold text-slate-900 text-sm">ระบบปฏิทินสวมใส่อุปกรณ์ 31 วัน</h4>
                           <p className="text-xs text-slate-600">
-                            พัฒนาตารางติดตามความร่วมมือการใส่อุปกรณ์ EF Trainer และประเมินพฤติกรรมการนอนหลับและการอ้าปากหายใจ
+                            พัฒนาตารางติดตามความร่วมมือการใส่อุปกรณ์ และประเมินพฤติกรรมการนอนหลับและการอ้าปากหายใจ
                           </p>
                         </div>
 
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                           <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                            Phase 3
+                            ระยะที่ 3
                           </span>
-                          <h4 className="font-bold text-slate-900 text-sm">คัดกรองเคส Red Flag & แจ้งเตือน</h4>
+                          <h4 className="font-bold text-slate-900 text-sm">คัดกรองเคสเฝ้าระวัง & แจ้งเตือน</h4>
                           <p className="text-xs text-slate-600">
-                            ตั้งกฎตรวจจับเคสเสี่ยงหยุดหายใจขณะหลับ (OSA) และระบบแจ้งเตือนเคสขาดการส่งการบ้านเกิน 7 วัน
+                            ตั้งกฎตรวจจับเคสเสี่ยงหยุดหายใจขณะหลับ และระบบแจ้งเตือนเคสขาดการส่งการบ้านเกิน 7 วัน
                           </p>
                         </div>
 
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                           <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-                            Phase 4
+                            ระยะที่ 4
                           </span>
-                          <h4 className="font-bold text-slate-900 text-sm">ระบบ Local-First & Cloud Sync</h4>
+                          <h4 className="font-bold text-slate-900 text-sm">ระบบฐานข้อมูลออฟไลน์ & ซิงค์ข้อมูล</h4>
                           <p className="text-xs text-slate-600">
-                            จัดเก็บข้อมูลแบบสองชั้น บันทึกลง LocalStorage ถาวร พร้อมระบบซิงค์ Google Sheets Webhook ป้องกันข้อมูลหาย 100%
+                            จัดเก็บข้อมูลแบบสองชั้น บันทึกลงระบบเครื่องถาวร พร้อมระบบซิงค์ Google Sheets ป้องกันข้อมูลหาย 100%
                           </p>
                         </div>
                       </div>
@@ -814,12 +814,12 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className="flex items-center gap-3 text-blue-700 font-black text-xl border-b border-blue-100 pb-3">
                       <Server className="w-6 h-6 text-blue-700" />
-                      <h3>หมวดที่ 3: สถาปัตยกรรมระบบ Hybrid Cloud (Google Sheets + Firestore + Cloud Run)</h3>
+                      <h3>หมวดที่ 3: สถาปัตยกรรมระบบคลาวด์แบบผสม</h3>
                     </div>
 
                     <div className="space-y-4 text-slate-700 text-sm">
                       <p>
-                        โครงสร้างสถาปัตยกรรมระบบ Growth Lab ถูกออกแบบให้ทำงานแบบ <strong>Hybrid Cloud Architecture</strong> มีความยืดหยุ่นสูง รวดเร็ว และประหยัดค่าใช้จ่าย:
+                        โครงสร้างสถาปัตยกรรมระบบแพลตฟอร์มอัจฉริยะนี้ถูกออกแบบให้ทำงานแบบ <strong>ระบบคลาวด์ผสม (Hybrid Cloud)</strong> มีความยืดหยุ่นสูง รวดเร็ว และประหยัดค่าใช้จ่าย:
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -829,11 +829,11 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                             <Database className="w-5 h-5" />
                           </div>
                           <div>
-                            <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider">Layer 1 • Google Sheets</span>
-                            <h4 className="font-bold text-slate-900 text-sm">Sheets Webhook Database</h4>
+                            <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider">ชั้นที่ 1 • ข้อมูลเชิงเอกสาร</span>
+                            <h4 className="font-bold text-slate-900 text-sm">ระบบ Google Sheets</h4>
                           </div>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            จัดเก็บข้อมูลหลัก Tab `Clinic_Config`, `Patients`, `Daily_Logs` ทำให้ทีมงานเปิดดูหรือ export รายงานจาก Google Sheets ได้สะดวกรวดเร็ว
+                            จัดเก็บข้อมูลหลักที่สามารถนำไปทำรายงานสถิติ เพื่อให้ทีมงานเปิดดูหรือนำข้อมูลไปใช้งานต่อในรูปแบบไฟล์ Spreadsheet ได้สะดวกรวดเร็ว
                           </p>
                         </div>
 
@@ -842,11 +842,11 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                             <HardDrive className="w-5 h-5" />
                           </div>
                           <div>
-                            <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">Layer 2 • Firestore</span>
-                            <h4 className="font-bold text-slate-900 text-sm">Firebase Cloud Firestore</h4>
+                            <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">ชั้นที่ 2 • ฐานข้อมูลผู้ใช้</span>
+                            <h4 className="font-bold text-slate-900 text-sm">ระบบจัดเก็บข้อมูลบนคลาวด์</h4>
                           </div>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            รองรับการซิงค์ข้อมูล Real-time ข้ามอุปกรณ์ ระบบยืนยันตัวตนผู้ใช้งาน และสิทธิ์การเข้าถึงข้อมูลตามบทบาท (RBAC)
+                            รองรับการซิงค์ข้อมูลอย่างรวดเร็วข้ามอุปกรณ์ ระบบยืนยันตัวตนผู้ใช้งาน และจัดการสิทธิ์การเข้าถึงข้อมูลตามบทบาทได้อย่างปลอดภัย
                           </p>
                         </div>
 
@@ -855,11 +855,11 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                             <Cpu className="w-5 h-5" />
                           </div>
                           <div>
-                            <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider">Layer 3 • Cloud Run</span>
-                            <h4 className="font-bold text-slate-900 text-sm">Cloud Run Frontline Applet</h4>
+                            <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider">ชั้นที่ 3 • ระบบแสดงผล</span>
+                            <h4 className="font-bold text-slate-900 text-sm">เทคโนโลยีหน้าจอโต้ตอบ</h4>
                           </div>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            ประมวลผลความเร็วสูง พัฒนาด้วย React 18, Vite, TypeScript, Motion และ Tailwind CSS แสดงผลได้ลื่นไหลทุกอุปกรณ์
+                            ประมวลผลความเร็วสูง พัฒนาด้วยเทคโนโลยีที่ทันสมัย เพื่อให้แสดงผลลื่นไหลและรองรับการใช้งานบนทุกขนาดหน้าจออุปกรณ์
                           </p>
                         </div>
 
@@ -873,40 +873,40 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className="flex items-center gap-3 text-purple-700 font-black text-xl border-b border-purple-100 pb-3">
                       <Cpu className="w-6 h-6 text-purple-700" />
-                      <h3>หมวดที่ 4: คุณค่าของซอร์สโค้ดและ 5 เสาหลักการเจริญเติบโต (5 Pillars Value)</h3>
+                      <h3>หมวดที่ 4: ระบบจัดการและ 5 เสาหลักการเจริญเติบโต</h3>
                     </div>
 
                     <div className="space-y-4 text-slate-700 text-sm">
                       <p>
-                        อัลกอริทึมซอร์สโค้ดของ Growth Lab เป็นการผนวกหลักวิชาการทันตกรรมเข้ากับวิทยาการคอมพิวเตอร์อย่างพิถีพิถัน:
+                        ระบบนี้เป็นการผนวกหลักวิชาการทันตกรรมเข้ากับการออกแบบกระบวนการจัดการอย่างพิถีพิถัน:
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                          <h4 className="font-black text-purple-800 text-sm">1. Full-Stack Modern Codebase</h4>
+                          <h4 className="font-black text-purple-800 text-sm">1. ระบบจัดการข้อมูลอัตโนมัติ</h4>
                           <p className="text-slate-600">
-                            เขียนด้วย TypeScript แบบ Strict Type Safety มีไฟล์ `types.ts` ควบคุมโครงสร้างข้อมูล ป้องกันข้อผิดพลาดตั้งแต่ขั้นตอนเขียนโค้ด
+                            โครงสร้างข้อมูลและการตรวจสอบความถูกต้องของข้อมูลถูกออกแบบมาอย่างรัดกุม เพื่อป้องกันข้อผิดพลาดตั้งแต่เริ่มต้น
                           </p>
                         </div>
 
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                          <h4 className="font-black text-purple-800 text-sm">2. Local-First Data Integrity</h4>
+                          <h4 className="font-black text-purple-800 text-sm">2. ความสมบูรณ์ของข้อมูลแบบเก็บในเครื่อง</h4>
                           <p className="text-slate-600">
-                            บันทึกข้อมูลทันทีลง LocalStorage Key `clinic_profile_data` พร้อมระบบดึงข้อมูลอัตโนมัติ ไม่สูญหายแม้อยู่ในพื้นที่ไร้สัญญาณ
+                            บันทึกข้อมูลทันทีลงระบบภายในเครื่อง พร้อมระบบดึงข้อมูลอัตโนมัติ ป้องกันข้อมูลสูญหายแม้อยู่ในพื้นที่ไร้สัญญาณอินเทอร์เน็ต
                           </p>
                         </div>
 
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                          <h4 className="font-black text-purple-800 text-sm">3. QR Token & Security Revocation</h4>
+                          <h4 className="font-black text-purple-800 text-sm">3. ความปลอดภัยของข้อมูล</h4>
                           <p className="text-slate-600">
-                            ระบบสร้าง Token QR Code ประจำตัวคนไข้ และระบบเพิกถอนสิทธิ์ Cascade Delete ป้องกันการรั่วไหลของข้อมูลคนไข้
+                            ระบบรหัสประจำตัวคนไข้ และระบบเพิกถอนสิทธิ์ ป้องกันการรั่วไหลของข้อมูลคนไข้
                           </p>
                         </div>
 
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                          <h4 className="font-black text-purple-800 text-sm">4. Multi-Role Permission Model</h4>
+                          <h4 className="font-black text-purple-800 text-sm">4. ระบบสิทธิ์การเข้าถึง</h4>
                           <p className="text-slate-600">
-                            แยกสิทธิ์การเข้าถึงระหว่าง ทันตแพทย์ (Doctor/Owner), ผู้ช่วยคลินิก (Staff/Admin) และผู้ปกครอง/เด็ก (Patient) อย่างปลอดภัย
+                            แยกสิทธิ์การเข้าถึงระหว่าง ทันตแพทย์ ผู้ช่วยคลินิก และผู้รับการดูแล อย่างปลอดภัย
                           </p>
                         </div>
                       </div>
@@ -919,7 +919,7 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className="flex items-center gap-3 text-emerald-700 font-black text-xl border-b border-emerald-100 pb-3">
                       <Layers className="w-6 h-6 text-emerald-700" />
-                      <h3>หมวดที่ 5: รายการส่งมอบ 5 เสาหลัก (Deliverables Checklist)</h3>
+                      <h3>หมวดที่ 5: รายการส่งมอบ 5 เสาหลัก</h3>
                     </div>
 
                     <div className="space-y-4">
@@ -944,116 +944,38 @@ export default function ClinicalSourceManager({ userRole, initialMainTab = 'deed
                   </div>
                 )}
 
-                {/* 6. TECHNICAL SUCCESSOR GUIDE & ONBOARDING */}
+                {/* 6. GENERAL USAGE GUIDE */}
                 {archTab === 6 && (
                   <div className="space-y-6 animate-in fade-in duration-200">
                     <div className="flex items-center gap-3 text-indigo-700 font-black text-xl border-b border-indigo-100 pb-3">
-                      <Code className="w-6 h-6 text-indigo-700" />
-                      <h3>หมวดที่ 6: คู่มือส่งต่องานทางเทคนิค (Technical Successor & Developer Guide)</h3>
+                      <HelpCircle className="w-6 h-6 text-indigo-700" />
+                      <h3>หมวดที่ 6: คู่มือการดูแลรักษาระบบเบื้องต้น</h3>
                     </div>
 
                     <div className="space-y-6 text-slate-700 text-xs sm:text-sm">
                       <p className="text-slate-600 leading-relaxed">
-                        คู่มือสรุปโครงสร้างโค้ด วิธีการตั้งค่า Webhook API และขั้นตอนการดูแลต่อเติมระบบสำหรับนักพัฒนารุ่นใหม่ที่จะเข้ามารับช่วงต่อ หลังจากทีมงานหลักทำการส่งมอบงานเรียบร้อยแล้ว:
+                        คู่มือสรุปการใช้งานเบื้องต้น สำหรับทีมงานคลินิก หลังจากติดตั้งระบบเรียบร้อยแล้ว:
                       </p>
 
-                      {/* Code Directory Architecture */}
-                      <div className="bg-slate-900 text-slate-200 rounded-2xl p-5 space-y-3 font-mono border border-slate-800 text-xs">
-                        <div className="flex items-center gap-2 text-amber-300 font-bold border-b border-slate-800 pb-2">
-                          <Terminal className="w-4 h-4 text-amber-300" />
-                          <span>1. โครงสร้างไฟล์และโมดูลสำคัญ (Key Directory Breakdown)</span>
+                      <div className="bg-slate-50 text-slate-700 rounded-2xl p-5 space-y-3 border border-slate-200 text-xs">
+                        <div className="flex items-center gap-2 text-indigo-700 font-bold border-b border-slate-200 pb-2">
+                          <BookOpen className="w-4 h-4 text-indigo-700" />
+                          <span>คู่มือการใช้งานทั่วไป</span>
                         </div>
-                        <ul className="space-y-2 text-slate-300 pl-2">
+                        <ul className="space-y-3 text-slate-600 pl-2">
                           <li>
-                            <strong className="text-amber-200">/src/components/</strong> : รวมคอมโพเนนต์หน้าจอหลัก
-                            <span className="block text-[11px] text-slate-400 pl-4">
-                              - ClinicProfile.tsx (บันทึกข้อมูลคลินิกและแพทย์ลง localStorage)
-                            </span>
-                            <span className="block text-[11px] text-slate-400 pl-4">
-                              - ClinicalSourceManager.tsx (เอกสารสำคัญโครงการ & Handover Deed)
-                            </span>
-                            <span className="block text-[11px] text-slate-400 pl-4">
-                              - StaffManagement.tsx (จัดการบัญชีบุคลากรและสิทธิ์การเข้าถึง)
-                            </span>
-                            <span className="block text-[11px] text-slate-400 pl-4">
-                              - ExerciseTracker.tsx & GrowthTracker.tsx (หน้าจอติดตามคนไข้ 5 เสาหลัก)
-                            </span>
+                            <strong className="text-slate-800">1. การจัดการผู้ใช้งานและสิทธิ์</strong>
+                            <p className="pl-4 mt-1">เจ้าของคลินิกสามารถมอบหมายหรือปรับเปลี่ยนสิทธิ์การเข้าถึงข้อมูลของพนักงานและผู้ช่วยแพทย์ได้ผ่านหน้า "จัดการบุคลากร" โดยควรระมัดระวังการให้สิทธิ์ผู้ดูแลระบบสูงสุด (Admin)</p>
                           </li>
                           <li>
-                            <strong className="text-amber-200">/src/services/</strong> : รวมบริการเชื่อมต่อ API
-                            <span className="block text-[11px] text-slate-400 pl-4">
-                              - googleAppsScriptService.ts (ตัวจัดการส่งข้อมูลไปยัง Google Sheets Webhook)
-                            </span>
-                            <span className="block text-[11px] text-slate-400 pl-4">
-                              - authService.ts (ระบบเข้าสู่ระบบและยืนยันตัวตน)
-                            </span>
-                            <span className="block text-[11px] text-slate-400 pl-4">
-                              - cloudApi.ts (การเชื่อมต่อระบบคลาวด์สำรอง)
-                            </span>
+                            <strong className="text-slate-800">2. การสำรองข้อมูล</strong>
+                            <p className="pl-4 mt-1">ระบบมีการสำรองข้อมูลอัตโนมัติไปยังระบบ Cloud แต่ผู้ดูแลคลินิกสามารถกดปุ่มซิงค์ข้อมูล (Sync) เพื่อความแน่ใจในความสดใหม่ของข้อมูลก่อนเริ่มงานในแต่ละวันได้</p>
                           </li>
                           <li>
-                            <strong className="text-amber-200">/src/context/PatientContext.tsx</strong> : ศูนย์กลางจัดการ State และข้อมูลคนไข้รวม
-                          </li>
-                          <li>
-                            <strong className="text-amber-200">/src/types.ts</strong> : ชนิดข้อมูล TypeScript Types & Interfaces ทั้งหมด
+                            <strong className="text-slate-800">3. การจัดการเอกสารสำหรับคนไข้</strong>
+                            <p className="pl-4 mt-1">สามารถสั่งพิมพ์รายงานและเอกสารสำหรับผู้รับการดูแลได้โดยตรงจากหน้า Dashboard รายบุคคล ซึ่งรูปแบบเอกสารจะถูกจัดให้เหมาะกับการพิมพ์ A4 อัตโนมัติ</p>
                           </li>
                         </ul>
-                      </div>
-
-                      {/* Google Apps Script Webhook Integration */}
-                      <div className="bg-indigo-50/70 p-5 rounded-2xl border border-indigo-200 space-y-3">
-                        <h4 className="font-black text-indigo-950 text-sm flex items-center gap-2">
-                          <ExternalLink className="w-4 h-4 text-indigo-700" />
-                          2. การตั้งค่าและเชื่อมต่อ Google Apps Script Webhook API
-                        </h4>
-                        <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
-                          <p>
-                            ระบบส่งข้อมูลการตั้งค่าคลินิกและประวัติคนไข้ไปยัง Google Sheets ผ่าน Webhook Web App URL ที่ตั้งค่าไว้ใน <code className="bg-white px-2 py-0.5 rounded border border-indigo-200 font-mono text-indigo-900">googleAppsScriptService.ts</code>
-                          </p>
-                          <div className="bg-white p-3.5 rounded-xl border border-indigo-200 space-y-1 font-mono text-[11px] text-slate-800">
-                            <span className="text-slate-500 font-sans block font-bold text-[10px]">ฟังก์ชันส่งข้อมูลลง Google Sheets:</span>
-                            <code>saveClinicConfigToGoogleSheets(settings)</code>
-                            <code>savePatientToGoogleSheets(patient)</code>
-                            <code>saveDailyLogToGoogleSheets(log)</code>
-                          </div>
-                          <p className="text-slate-600">
-                            * เมื่อสร้าง Google Apps Script ใหม่ในอนาคต ให้คัดลอก Deployment URL แบบ `Anyone` มาวางลงในช่องตั้งค่า Webhook ในหน้าระบบ หรือเปลี่ยนในไฟล์ `googleAppsScriptService.ts`
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* New Developer Onboarding Checklist */}
-                      <div className="bg-emerald-50/70 p-5 rounded-2xl border border-emerald-200 space-y-3">
-                        <h4 className="font-black text-emerald-950 text-sm flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                          3. ขั้นตอนสำหรับนักพัฒนาคนใหม่เมื่อรับช่วงต่อ (Developer Onboarding Checklist)
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                          <div className="p-3 bg-white rounded-xl border border-emerald-200 space-y-1">
-                            <span className="font-bold text-emerald-900 block">Step 1: Setup Environment</span>
-                            <p className="text-slate-600">
-                              รัน <code className="bg-slate-100 px-1 rounded font-mono">npm install</code> แล้วเปิดเซิร์ฟเวอร์ด้วย <code className="bg-slate-100 px-1 rounded font-mono">npm run dev</code> (Port 3000)
-                            </p>
-                          </div>
-                          <div className="p-3 bg-white rounded-xl border border-emerald-200 space-y-1">
-                            <span className="font-bold text-emerald-900 block">Step 2: Check LocalStorage Keys</span>
-                            <p className="text-slate-600">
-                              ตรวจสอบ Key <code className="bg-slate-100 px-1 rounded font-mono">clinic_profile_data</code> และ <code className="bg-slate-100 px-1 rounded font-mono">growthlab_clinic_info</code> ใน DevTools
-                            </p>
-                          </div>
-                          <div className="p-3 bg-white rounded-xl border border-emerald-200 space-y-1">
-                            <span className="font-bold text-emerald-900 block">Step 3: Verify Print Stylesheets</span>
-                            <p className="text-slate-600">
-                              ทดสอบปุ่มพิมพ์ PDF เพื่อให้แน่ใจว่า Class <code className="bg-slate-100 px-1 rounded font-mono">print:hidden</code> ทำงานถูกต้อง
-                            </p>
-                          </div>
-                          <div className="p-3 bg-white rounded-xl border border-emerald-200 space-y-1">
-                            <span className="font-bold text-emerald-900 block">Step 4: Maintain Tailwind Theme</span>
-                            <p className="text-slate-600">
-                              รักษาธีมสีกรมท่า-ม่วง-ทอง และอย่าดัดแปลงโลโก้หลักตามกฎ AGENTS.md
-                            </p>
-                          </div>
-                        </div>
                       </div>
 
                     </div>

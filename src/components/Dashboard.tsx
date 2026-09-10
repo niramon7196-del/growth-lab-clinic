@@ -776,7 +776,7 @@ export default function Dashboard({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="relative w-full flex flex-col gap-6 text-left max-w-full lg:max-w-7xl mx-auto font-sans text-slate-800 box-border bg-transparent"
+      className="relative w-full flex flex-col gap-4 sm:gap-6 text-left max-w-full lg:max-w-7xl mx-auto font-sans text-slate-800 box-border bg-transparent"
     >
       {/* 3D Atmospheric Fluid Glow Orbs */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden -z-0">
@@ -787,7 +787,7 @@ export default function Dashboard({
 
       {/* [บล็อก 1: บนสุด] แถบแบนเนอร์ ปฏิบัติงานคลินิก (Clinical Performance) พร้อมปุ่มซิงค์ชีต, QR Code และสารบบ */}
       <div 
-        className="bg-white/80 backdrop-blur-md rounded-2xl shadow-md border border-slate-300/80 p-5 relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 w-full"
+        className="bg-white/80 backdrop-blur-md rounded-2xl shadow-md border border-slate-300/80 p-4 sm:p-5 relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 w-full"
       >
         <div className="flex items-center gap-3.5 sm:gap-4 shrink-0 min-w-0">
           <Logo className="w-24 sm:w-28 h-auto shrink-0" />
@@ -796,11 +796,11 @@ export default function Dashboard({
               <h1 className="text-xl sm:text-2xl font-bold text-slate-950 tracking-tight whitespace-nowrap">
                 ภาพรวมผลการปฏิบัติงานคลินิก
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-100/90 text-purple-900 border border-purple-200/80 inline-flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
+              <span className="px-2.5 py-0.5 rounded-full text-xs sm:text-[13px] font-extrabold bg-purple-100/90 text-purple-900 border border-purple-200/80 inline-flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                 <Sparkles className="w-3 h-3 text-purple-600 animate-pulse" />
                 Clinical Performance
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100/80 text-sky-900 border border-sky-200/80 whitespace-nowrap shrink-0">
+              <span className="px-2.5 py-0.5 rounded-full text-xs sm:text-[13px] font-bold bg-sky-100/80 text-sky-900 border border-sky-200/80 whitespace-nowrap shrink-0">
                 📅 {formatThaiDate(todayStr)}
               </span>
             </div>
@@ -842,7 +842,7 @@ export default function Dashboard({
       </div>
 
       {/* [บล็อก 2] แถวการ์ดสรุป 4 ใบแนวนอน: "คนไข้ทั้งหมด" | "เช็กอินวันนี้" | "ทำแบบฝึกหัดวันนี้" | "ยอดใส่อุปกรณ์" */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full relative z-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full relative z-10">
         {/* Card 1: คนไข้ทั้งหมด */}
         <div className="rounded-2xl p-4 bg-white/80 backdrop-blur-md border border-slate-300/80 shadow-md hover:shadow-lg transition-all flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -850,8 +850,8 @@ export default function Dashboard({
               <Users className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <span className="text-xs sm:text-sm font-bold text-slate-900 block truncate">คนไข้ทั้งหมด</span>
-              <span className="text-[10px] sm:text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 inline-block mt-0.5">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight">คนไข้ทั้งหมด</span>
+              <span className="text-[11px] sm:text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 inline-block mt-0.5">
                 +{stats.newThisMonth} ใหม่เดือนนี้
               </span>
             </div>
@@ -860,7 +860,7 @@ export default function Dashboard({
             <div className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight leading-none">
               {stats.total}
             </div>
-            <span className="text-[10px] font-bold text-slate-500">คน</span>
+            <span className="text-xs font-bold text-slate-500">คน</span>
           </div>
         </div>
 
@@ -871,8 +871,8 @@ export default function Dashboard({
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <span className="text-xs sm:text-sm font-bold text-slate-900 block truncate">เช็กอินวันนี้</span>
-              <span className="text-[10px] sm:text-[11px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200 inline-block mt-0.5">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight">เช็กอินวันนี้</span>
+              <span className="text-[11px] sm:text-xs font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200 inline-block mt-0.5">
                 {stats.checkedInPct}% อัตราเช็กอิน
               </span>
             </div>
@@ -881,7 +881,7 @@ export default function Dashboard({
             <div className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight leading-none">
               {stats.checkedInToday}
             </div>
-            <span className="text-[10px] font-bold text-slate-500">/ {stats.total} คน</span>
+            <span className="text-xs font-bold text-slate-500">/ {stats.total} คน</span>
           </div>
         </div>
 
@@ -892,8 +892,8 @@ export default function Dashboard({
               <Flame className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <span className="text-xs sm:text-sm font-bold text-slate-900 block truncate">ทำแบบฝึกหัดวันนี้</span>
-              <span className="text-[10px] sm:text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 inline-block mt-0.5">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight">ทำแบบฝึกหัดวันนี้</span>
+              <span className="text-[11px] sm:text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 inline-block mt-0.5">
                 {stats.completionRate}% ส่งภารกิจ
               </span>
             </div>
@@ -902,7 +902,7 @@ export default function Dashboard({
             <div className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight leading-none">
               {stats.completedToday}
             </div>
-            <span className="text-[10px] font-bold text-slate-500">คน</span>
+            <span className="text-xs font-bold text-slate-500">คน</span>
           </div>
         </div>
 
@@ -913,8 +913,8 @@ export default function Dashboard({
               <Smile className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <span className="text-xs sm:text-sm font-bold text-slate-900 block truncate">ยอดใส่อุปกรณ์ EF</span>
-              <span className="text-[10px] sm:text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-tight">ยอดใส่อุปกรณ์ EF</span>
+              <span className="text-[11px] sm:text-xs font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
                 {stats.efTrainerPercent}% โครงสร้างฟัน
               </span>
             </div>
@@ -923,13 +923,13 @@ export default function Dashboard({
             <div className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight leading-none">
               {stats.efTrainerCount}
             </div>
-            <span className="text-[10px] font-bold text-slate-500">คน</span>
+            <span className="text-xs font-bold text-slate-500">คน</span>
           </div>
         </div>
       </div>
 
       {/* [บล็อก 3] กราฟวงแหวน 3 ตัวชี้วัดความสม่ำเสมอ (3 Donut Gauges) ขยายกว้างเต็มบล็อก (Full Width Card) วาง 3 เกจเรียงสบายตาพร้อมตัวเลขเปอร์เซ็นต์และป้ายสรุป */}
-      <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-md border border-slate-300/80 p-5 sm:p-6 relative z-10 space-y-5">
+      <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-md border border-slate-300/80 p-4 sm:p-5 sm:p-6 relative z-10 space-y-5">
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white shadow-2xs flex items-center justify-center shrink-0">
@@ -950,12 +950,12 @@ export default function Dashboard({
         </div>
 
         {/* 3 Donut Gauges Side-by-Side (Full Width Expanded) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 items-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-4 sm:gap-6 items-center">
           {/* Col 1: Sky Blue Gauge */}
           <div className="flex flex-col items-center space-y-3 p-4 rounded-2xl bg-sky-50/60 border border-sky-200/70 hover:shadow-xs transition-all">
             <div className="w-full text-center py-1 px-2 rounded-lg bg-sky-100 border border-sky-300 flex items-center justify-center gap-1.5 shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-sky-600 shrink-0" />
-              <span className="text-xs font-black text-sky-950 truncate">ความสม่ำเสมอ</span>
+              <span className="text-xs font-black text-sky-950 leading-tight">ความสม่ำเสมอ</span>
             </div>
 
             <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
@@ -985,7 +985,7 @@ export default function Dashboard({
                 <span className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
                   {gaugeRings.gauge1.pct}%
                 </span>
-                <span className="text-[10px] sm:text-xs font-bold text-sky-700 mt-1">เช็กอิน</span>
+                <span className="text-xs sm:text-xs font-bold text-sky-700 mt-1">เช็กอิน</span>
               </div>
             </div>
 
@@ -998,7 +998,7 @@ export default function Dashboard({
           <div className="flex flex-col items-center space-y-3 p-4 rounded-2xl bg-orange-50/60 border border-orange-200/70 hover:shadow-xs transition-all">
             <div className="w-full text-center py-1 px-2 rounded-lg bg-orange-100 border border-orange-300 flex items-center justify-center gap-1.5 shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-[#F97316] shrink-0" />
-              <span className="text-xs font-black text-orange-950 truncate">ภารกิจสำเร็จ</span>
+              <span className="text-xs font-black text-orange-950 leading-tight">ภารกิจสำเร็จ</span>
             </div>
 
             <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
@@ -1028,7 +1028,7 @@ export default function Dashboard({
                 <span className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
                   {gaugeRings.gauge2.pct}%
                 </span>
-                <span className="text-[10px] sm:text-xs font-bold text-orange-700 mt-1">ครบถ้วน</span>
+                <span className="text-xs sm:text-xs font-bold text-orange-700 mt-1">ครบถ้วน</span>
               </div>
             </div>
 
@@ -1041,7 +1041,7 @@ export default function Dashboard({
           <div className="flex flex-col items-center space-y-3 p-4 rounded-2xl bg-purple-50/60 border border-purple-200/70 hover:shadow-xs transition-all">
             <div className="w-full text-center py-1 px-2 rounded-lg bg-purple-100 border border-purple-300 flex items-center justify-center gap-1.5 shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-purple-600 shrink-0" />
-              <span className="text-xs font-black text-purple-950 truncate">การบ้าน OMT</span>
+              <span className="text-xs font-black text-purple-950 leading-tight">การบ้าน OMT</span>
             </div>
 
             <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
@@ -1071,7 +1071,7 @@ export default function Dashboard({
                 <span className="text-xl sm:text-2xl font-black text-slate-900 leading-none">
                   {gaugeRings.gauge3.pct}%
                 </span>
-                <span className="text-[10px] sm:text-xs font-bold text-purple-700 mt-1">ส่งแล้ว</span>
+                <span className="text-xs sm:text-xs font-bold text-purple-700 mt-1">ส่งแล้ว</span>
               </div>
             </div>
 
@@ -1096,7 +1096,7 @@ export default function Dashboard({
       </div>
 
       {/* [บล็อก 4] กราฟแนวโน้มภารกิจ 7 วัน และ 4 เสาหลักการรักษา (7-Day Wave & 4 Pillars of Treatment) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full relative z-10 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:p-5 w-full relative z-10 items-stretch">
         
         {/* กราฟแนวโน้มภารกิจ 7 วัน (7-Day Wave) */}
         <div className="lg:col-span-7 bg-white/80 backdrop-blur-md rounded-2xl p-4 sm:p-6 border border-slate-300/80 shadow-md flex flex-col justify-between space-y-4">
@@ -1240,12 +1240,12 @@ export default function Dashboard({
                 <div key={mod.id} className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1.5 hover:border-blue-300 transition-colors shadow-2xs">
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-black text-slate-900 text-xs truncate">{mod.name}</span>
-                      <span className="text-[10px] text-slate-400 hidden sm:inline truncate">({mod.subtitle})</span>
+                      <span className="font-black text-slate-900 text-xs leading-tight">{mod.name}</span>
+                      <span className="text-xs text-slate-400 hidden sm:inline leading-tight">({mod.subtitle})</span>
                     </div>
                     <div className="flex items-center gap-1.5 font-black shrink-0">
                       <span className="text-slate-900 text-xs font-bold">{mod.count} คน</span>
-                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${badgeBg} ${textColor}`}>
+                      <span className={`text-xs font-black px-1.5 py-0.5 rounded border ${badgeBg} ${textColor}`}>
                         {mod.percent}%
                       </span>
                     </div>
@@ -1290,7 +1290,7 @@ export default function Dashboard({
               <div>
                 <h3 className="text-base sm:text-lg font-bold text-slate-950 flex items-center gap-2 leading-tight">
                   <span>รายชื่อคนไข้และสถานะปัจจุบัน</span>
-                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                  <span className="text-xs sm:text-[13px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
                     พบ {dashFilteredPatients.length} คน
                   </span>
                 </h3>
@@ -1349,7 +1349,7 @@ export default function Dashboard({
               {/* Status Filter */}
               <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-2xs">
                 <Filter className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">สถานะ:</span>
+                <span className="text-xs sm:text-[13px] font-bold text-slate-500 whitespace-nowrap">สถานะ:</span>
                 <select
                   value={dashStatusFilter}
                   onChange={(e) => setDashStatusFilter(e.target.value as any)}
@@ -1369,7 +1369,7 @@ export default function Dashboard({
               {/* Date Filter */}
               <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-2xs">
                 <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">วันที่:</span>
+                <span className="text-xs sm:text-[13px] font-bold text-slate-500 whitespace-nowrap">วันที่:</span>
                 <select
                   value={dashDateFilter}
                   onChange={(e) => setDashDateFilter(e.target.value as any)}
@@ -1397,7 +1397,7 @@ export default function Dashboard({
 
               {/* Sort By */}
               <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-2xs">
-                <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">จัดเรียง:</span>
+                <span className="text-xs sm:text-[13px] font-bold text-slate-500 whitespace-nowrap">จัดเรียง:</span>
                 <select
                   value={dashSortBy}
                   onChange={(e) => setDashSortBy(e.target.value as any)}
@@ -1443,15 +1443,15 @@ export default function Dashboard({
           {/* Active Filter Badges Bar */}
           {hasActiveDashFilters && (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[11px] font-bold text-slate-400">กำลังกรอง:</span>
+              <span className="text-xs sm:text-[13px] font-bold text-slate-400">กำลังกรอง:</span>
               {dashSearch && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 font-bold border border-indigo-200 text-[11px]">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 font-bold border border-indigo-200 text-xs sm:text-[13px]">
                   <span>ค้นหา: "{dashSearch}"</span>
                   <button type="button" onClick={() => setDashSearch('')} className="hover:text-indigo-950 p-0.5">✕</button>
                 </span>
               )}
               {dashStatusFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200 text-[11px]">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200 text-xs sm:text-[13px]">
                   <span>
                     สถานะ: {
                       dashStatusFilter === 'checked_today' ? 'เช็กอินแล้ววันนี้' :
@@ -1466,7 +1466,7 @@ export default function Dashboard({
                 </span>
               )}
               {dashDateFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 font-bold border border-blue-200 text-[11px]">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 font-bold border border-blue-200 text-xs sm:text-[13px]">
                   <span>
                     วันที่: {
                       dashDateFilter === 'today' ? `วันนี้ (${todayStr})` :
@@ -1477,7 +1477,7 @@ export default function Dashboard({
                   <button type="button" onClick={() => { setDashDateFilter('all'); setDashCustomDate(''); }} className="hover:text-blue-950 p-0.5">✕</button>
                 </span>
               )}
-              <span className="text-[11px] font-bold text-slate-500 ml-auto">
+              <span className="text-xs sm:text-[13px] font-bold text-slate-500 ml-auto">
                 แสดง {displayedDashPatients.length} จาก {dashFilteredPatients.length} คน (ทั้งหมด {patients.length} คน)
               </span>
             </div>
@@ -1536,27 +1536,27 @@ export default function Dashboard({
                     </td>
                     <td className="py-3 px-3.5">
                       <div className="space-y-0.5">
-                        <span className="font-black text-slate-900 block text-xs sm:text-sm truncate max-w-[200px]">
+                        <span className="font-black text-slate-900 block text-xs sm:text-sm leading-tight max-w-[200px]">
                           {info.displayName} {cleanNick ? `(${cleanNick})` : ''}
                         </span>
-                        <span className="font-mono text-[10px] font-bold text-sky-800 bg-sky-100 px-1.5 py-0.5 rounded border border-sky-200 inline-block">
+                        <span className="font-mono text-xs font-bold text-sky-800 bg-sky-100 px-1.5 py-0.5 rounded border border-sky-200 inline-block">
                           HN: {p.hn || p.id} • {info.ageDisplayText}
                         </span>
                       </div>
                     </td>
                     <td className="py-3 px-3.5">
-                      <span className="text-[11px] font-bold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 inline-block shadow-2xs">
+                      <span className="text-xs sm:text-[13px] font-bold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 inline-block shadow-2xs">
                         {toolsLabel}
                       </span>
                     </td>
                     <td className="py-3 px-3.5">
                       {p.lastCheckIn === todayStr ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           เช็กอินแล้ว
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
                           <Clock className="w-3 h-3 text-slate-400" />
                           รอเช็กอิน
                         </span>
@@ -1566,7 +1566,7 @@ export default function Dashboard({
                       <button
                         type="button"
                         onClick={() => handleOpenAssignModal(p.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 cursor-pointer transition-all"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 cursor-pointer transition-all"
                         title="คลิกเพื่อมอบหมายการบ้านคนไข้คนนี้"
                       >
                         <BookOpen className="w-3 h-3 text-purple-600" />
@@ -1577,7 +1577,7 @@ export default function Dashboard({
                       <button
                         type="button"
                         onClick={() => handleOpenFeedback(p)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 cursor-pointer transition-all"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 cursor-pointer transition-all"
                         title="ให้ข้อเสนอแนะและประเมินผล"
                       >
                         <Award className="w-3 h-3 text-amber-600" />
@@ -1600,7 +1600,7 @@ export default function Dashboard({
                             if (onSelectPatient) onSelectPatient(p.id, true);
                             if (onNavigate) onNavigate('ผู้รับการดูแล', p.id);
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all font-black text-[11px] shadow-2xs inline-flex items-center gap-1 cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all font-black text-xs sm:text-[13px] shadow-2xs inline-flex items-center gap-1 cursor-pointer"
                           title="เปิดดูแฟ้มประวัติคนไข้"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -1644,7 +1644,7 @@ export default function Dashboard({
                   </div>
                   <div>
                     <h3 className="text-base font-black text-slate-900">เลือกคนไข้เพื่อเปิด QR Code</h3>
-                    <p className="text-[11px] text-slate-500">สำหรับสแกนเข้าใช้งานหรือพิมพ์เป็นการ์ดประจำตัว</p>
+                    <p className="text-xs sm:text-[13px] text-slate-500">สำหรับสแกนเข้าใช้งานหรือพิมพ์เป็นการ์ดประจำตัว</p>
                   </div>
                 </div>
                 <button 
@@ -1675,7 +1675,7 @@ export default function Dashboard({
                             <span className="text-purple-600 font-bold text-xs">{info.formattedNickname}</span>
                           )}
                         </div>
-                        <div className="text-[10px] text-slate-500 font-mono font-bold mt-0.5">
+                        <div className="text-xs text-slate-500 font-mono font-bold mt-0.5">
                           HN: {p.hn || p.id} • {info.ageDisplayText} {cleanPhone ? `• 📞 ${cleanPhone}` : ''}
                         </div>
                       </div>
@@ -1709,7 +1709,7 @@ export default function Dashboard({
                   </div>
                   <div>
                     <h3 className="text-base font-black text-slate-900">มอบหมายแผนการฝึก / การบ้าน</h3>
-                    <p className="text-[11px] text-slate-500">เลือกคนไข้และเลือกแบบฝึกหัดที่ต้องการมอบหมาย</p>
+                    <p className="text-xs sm:text-[13px] text-slate-500">เลือกคนไข้และเลือกแบบฝึกหัดที่ต้องการมอบหมาย</p>
                   </div>
                 </div>
                 <button 
@@ -1797,11 +1797,11 @@ export default function Dashboard({
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-black text-slate-900 flex items-center justify-between">
                           <span>{ex.title}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100/70 text-purple-800 border border-purple-200 font-bold">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100/70 text-purple-800 border border-purple-200 font-bold">
                             {ex.targetReps} รอบ / {ex.durationMinutes || 5} นาที
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">
+                        <p className="text-xs sm:text-[13px] text-slate-500 line-clamp-2 mt-0.5">
                           {ex.purpose || ex.description}
                         </p>
                       </div>

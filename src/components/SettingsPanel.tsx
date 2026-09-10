@@ -86,6 +86,8 @@ interface SettingsPanelProps {
   onAddStaff?: (staff: Omit<StaffAccount, 'id'>) => void;
   onBack?: () => void;
   onClose?: () => void;
+  isDeveloperMode?: boolean;
+  onNavigateToDocs?: () => void;
 }
 
 export default function SettingsPanel({
@@ -99,7 +101,9 @@ export default function SettingsPanel({
   onToggleStaffStatus,
   onAddStaff,
   onBack,
-  onClose
+  onClose,
+  isDeveloperMode = false,
+  onNavigateToDocs
 }: SettingsPanelProps) {
   const [docName, setDocName] = useState(settings.doctorName || 'ทันตแพทย์หญิง นภาพร วรรณษา');
   const [docTitle, setDocTitle] = useState(settings.doctorTitlePosition || 'ทันตแพทย์ผู้ให้การรักษาและเจ้าของคลินิก');
@@ -523,13 +527,17 @@ export default function SettingsPanel({
             <div className="min-w-0">
               <div className="inline-flex items-center gap-1 bg-purple-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-purple-300/30 text-purple-200 mb-1">
                 <ShieldCheck className="w-3 h-3 text-purple-300 shrink-0" />
-                <span>System Settings & Data Separation</span>
+                <span>{isDeveloperMode ? 'Developer & Core Config' : 'Clinic Profile & Google Sheets Connection'}</span>
               </div>
               <h1 className="text-base sm:text-lg font-bold text-white leading-tight">
-                ตั้งค่าระบบและโปรไฟล์ / ข้อมูลคลินิก
+                {isDeveloperMode 
+                  ? 'ผู้พัฒนาระบบ (Developer & Technical Settings)' 
+                  : 'ตั้งค่าระบบและโปรไฟล์คลินิก (Clinic Settings)'}
               </h1>
               <p className="text-purple-200 text-xs font-medium mt-0.5 leading-relaxed">
-                จัดการข้อมูลผู้ใช้งานที่เข้าสู่ระบบ (Account) แยกต่างหากจากข้อมูลแพทย์เจ้าของคลินิก (Owner Doctor) และพารามิเตอร์คลินิก
+                {isDeveloperMode
+                  ? 'ศูนย์การตั้งค่าทางเทคนิค โครงสร้างข้อมูล ทดสอบระบบ และการกู้คืนฐานข้อมูล'
+                  : 'จัดการข้อมูลผู้ใช้งานที่เข้าสู่ระบบ (Account) และการเชื่อมต่อ Google Sheets คลินิก เพื่อความปลอดภัยของฐานข้อมูล'}
               </p>
             </div>
           </div>
@@ -546,6 +554,36 @@ export default function SettingsPanel({
         <div className="bg-emerald-50 border-2 border-emerald-400 text-emerald-900 p-4 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-2xs animate-fade-in">
           <Check className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>บันทึกการปรับปรุงตัวแปรรักษา ข้อมูลคลินิก และพารามิเตอร์ระบบเรียบร้อยแล้ว!</span>
+        </div>
+      )}
+
+      {isDeveloperMode && onNavigateToDocs && (
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 p-5 rounded-2xl border border-indigo-500/40 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/60 border border-indigo-400/40 flex items-center justify-center text-white shrink-0 shadow-sm">
+              <ShieldCheck className="w-5 h-5 text-indigo-300" />
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-1.5 bg-indigo-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-indigo-400/30 text-indigo-200 mb-0.5">
+                <Sparkles className="w-3 h-3 text-amber-300" />
+                <span>Developer Architecture Vault</span>
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-white leading-tight">
+                เอกสารสำคัญโครงสร้างระบบ (Technical Documentation & Handover)
+              </h3>
+              <p className="text-xs text-slate-300 mt-0.5">
+                พิมพ์เขียวสถาปัตยกรรมระบบ โค้ดฐานข้อมูล และคู่มือส่งมอบงาน (เข้าถึงเฉพาะ niramon7196@gmail.com หรือผ่านหน้านี้)
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onNavigateToDocs}
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto shadow-sm"
+          >
+            <span>เปิดดูเอกสารระบบ</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -1142,13 +1180,17 @@ export default function SettingsPanel({
             <div>
               <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
                 <HardDrive className="w-4.5 h-4.5 text-indigo-600 shrink-0" />
-                <span>สำรองและกู้คืนข้อมูล (Data Management)</span>
+                <span>{isDeveloperMode ? 'สำรองและกู้คืนข้อมูล (Data Management)' : 'สำรองข้อมูลระบบ (Data Backup)'}</span>
               </h3>
-              <p className="text-xs text-slate-600 mt-0.5">นำออกข้อมูลระบบทั้งหมดเพื่อเก็บเป็นไฟล์สำรอง หรือนำเข้าเพื่อกู้คืน</p>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {isDeveloperMode 
+                  ? 'นำออกข้อมูลระบบทั้งหมดเพื่อเก็บเป็นไฟล์สำรอง หรือนำเข้าเพื่อกู้คืน (เขียนทับข้อมูลปัจจุบัน)' 
+                  : 'นำออกข้อมูลระบบทั้งหมดเพื่อเก็บเป็นไฟล์สำรอง (JSON) เพื่อความปลอดภัยของฐานข้อมูล'}
+              </p>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className={`grid grid-cols-1 ${isDeveloperMode ? 'sm:grid-cols-2' : ''} gap-3`}>
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-300 space-y-2 flex flex-col justify-between min-w-0">
               <div>
                 <div className="flex items-center gap-1.5 mb-1">
@@ -1167,154 +1209,161 @@ export default function SettingsPanel({
               </button>
             </div>
             
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-300 space-y-2 flex flex-col justify-between min-w-0">
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Upload className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <h4 className="font-bold text-xs text-slate-900">นำเข้าข้อมูล (Restore)</h4>
+            {/* นำเข้าข้อมูล (Restore) - แสดงเฉพาะในหน้า Developer & Technical Settings เท่านั้น */}
+            {isDeveloperMode && (
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-300 space-y-2 flex flex-col justify-between min-w-0">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Upload className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <h4 className="font-bold text-xs text-slate-900">นำเข้าข้อมูล (Restore)</h4>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">กู้คืนระบบจากไฟล์สำรองข้อมูล (เขียนทับข้อมูลปัจจุบัน)</p>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">กู้คืนระบบจากไฟล์สำรองข้อมูล (เขียนทับข้อมูลปัจจุบัน)</p>
+                <input 
+                  type="file"
+                  accept=".json"
+                  ref={backupInputRef}
+                  onChange={handleImportBackup}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => backupInputRef.current?.click()}
+                  className="w-full py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer min-h-[38px]"
+                >
+                  <Upload className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">นำเข้าข้อมูลสำรอง (Restore)</span>
+                </button>
               </div>
-              <input 
-                type="file"
-                accept=".json"
-                ref={backupInputRef}
-                onChange={handleImportBackup}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => backupInputRef.current?.click()}
-                className="w-full py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer min-h-[38px]"
-              >
-                <Upload className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">นำเข้าข้อมูลสำรอง (Restore)</span>
-              </button>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* SYSTEM VERSION & AUTO-UPDATE ENGINE */}
-        <div className="bg-white/85 backdrop-blur-md rounded-2xl p-5 border-2 border-amber-400/60 shadow-2xs space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-slate-200/80 pb-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                  <ShieldCheck className="w-4.5 h-4.5 text-purple-600 shrink-0" />
-                  <span>ระบบตรวจจับและอัปเดตเวอร์ชันอัตโนมัติ (Auto Version Checker)</span>
-                </h3>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shrink-0">
-                  {CURRENT_APP_VERSION}
-                </span>
+        {/* SYSTEM VERSION & AUTO-UPDATE ENGINE / TESTING SANDBOX (แสดงเฉพาะในหน้า Developer & Technical Settings เท่านั้น) */}
+        {isDeveloperMode && (
+          <div className="bg-white/85 backdrop-blur-md rounded-2xl p-5 border-2 border-amber-400/60 shadow-2xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-slate-200/80 pb-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <ShieldCheck className="w-4.5 h-4.5 text-purple-600 shrink-0" />
+                    <span>ระบบตรวจจับและอัปเดตเวอร์ชันอัตโนมัติ (Auto Version Checker)</span>
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shrink-0">
+                    {CURRENT_APP_VERSION}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                  ระบบตรวจเช็กเวอร์ชันใหม่อัตโนมัติทุกครั้งที่สลับแท็บ/เปิดแอป และตรวจสอบเบื้องหลังทุก 45 วินาที
+                </p>
               </div>
-              <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                ระบบตรวจเช็กเวอร์ชันใหม่อัตโนมัติทุกครั้งที่สลับแท็บ/เปิดแอป และตรวจสอบเบื้องหลังทุก 45 วินาที
-              </p>
-            </div>
 
-            <button
-              type="button"
-              disabled={isCheckingVersion}
-              onClick={async () => {
-                setIsCheckingVersion(true);
-                setVersionCheckStatus(null);
-                try {
-                  const res = await checkRemoteVersion();
-                  if (res.hasUpdate) {
-                    setVersionCheckStatus(`พบเวอร์ชันใหม่ (${res.remoteVersion}) กำลังเริ่มระบบอัปเดต...`);
-                    setTimeout(() => {
-                      simulateLiveUpdate(res.remoteVersion);
-                    }, 800);
-                  } else {
-                    setVersionCheckStatus(`✅ แอปพลิเคชันของคุณเป็นเวอร์ชันล่าสุดแล้ว (${res.currentVersion})`);
+              <button
+                type="button"
+                disabled={isCheckingVersion}
+                onClick={async () => {
+                  setIsCheckingVersion(true);
+                  setVersionCheckStatus(null);
+                  try {
+                    const res = await checkRemoteVersion();
+                    if (res.hasUpdate) {
+                      setVersionCheckStatus(`พบเวอร์ชันใหม่ (${res.remoteVersion}) กำลังเริ่มระบบอัปเดต...`);
+                      setTimeout(() => {
+                        simulateLiveUpdate(res.remoteVersion);
+                      }, 800);
+                    } else {
+                      setVersionCheckStatus(`✅ แอปพลิเคชันของคุณเป็นเวอร์ชันล่าสุดแล้ว (${res.currentVersion})`);
+                    }
+                  } catch (e: any) {
+                    setVersionCheckStatus(`ข้อผิดพลาดในการตรวจสอบ: ${e?.message || 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้'}`);
+                  } finally {
+                    setIsCheckingVersion(false);
                   }
-                } catch (e: any) {
-                  setVersionCheckStatus(`ข้อผิดพลาดในการตรวจสอบ: ${e?.message || 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้'}`);
-                } finally {
-                  setIsCheckingVersion(false);
-                }
-              }}
-              className="px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-amber-400/50 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer shrink-0 w-full sm:w-auto min-h-[38px]"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isCheckingVersion ? 'animate-spin text-purple-600' : ''}`} />
-              <span className="whitespace-nowrap">{isCheckingVersion ? 'กำลังตรวจเช็ก...' : 'ตรวจเช็กเวอร์ชันล่าสุด'}</span>
-            </button>
-          </div>
-
-          {versionCheckStatus && (
-            <div className="p-3 bg-purple-50/90 rounded-xl border border-purple-300 text-xs font-bold text-purple-950 flex items-center justify-between gap-2">
-              <span className="leading-relaxed">{versionCheckStatus}</span>
-              <button 
-                type="button" 
-                onClick={() => setVersionCheckStatus(null)} 
-                className="text-purple-500 hover:text-purple-800 p-1 cursor-pointer shrink-0"
+                }}
+                className="px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-amber-400/50 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer shrink-0 w-full sm:w-auto min-h-[38px]"
               >
-                ✕
+                <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isCheckingVersion ? 'animate-spin text-purple-600' : ''}`} />
+                <span className="whitespace-nowrap">{isCheckingVersion ? 'กำลังตรวจเช็ก...' : 'ตรวจเช็กเวอร์ชันล่าสุด'}</span>
               </button>
             </div>
-          )}
 
-          {/* Test & Simulation Controls */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-300 space-y-2.5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <Bell className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span>เครื่องมือทดสอบการแจ้งเตือน (Testing Sandbox)</span>
-              </span>
-              <span className="text-xs text-slate-500 font-medium">ทดสอบระบบ Toast Notification</span>
-            </div>
+            {versionCheckStatus && (
+              <div className="p-3 bg-purple-50/90 rounded-xl border border-purple-300 text-xs font-bold text-purple-950 flex items-center justify-between gap-2">
+                <span className="leading-relaxed">{versionCheckStatus}</span>
+                <button 
+                  type="button" 
+                  onClick={() => setVersionCheckStatus(null)} 
+                  className="text-purple-500 hover:text-purple-800 p-1 cursor-pointer shrink-0"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-0.5">
-              <button
-                type="button"
-                onClick={() => simulateUpdatePrompt('v1.2.0')}
-                className="flex items-center gap-2 p-3 bg-white hover:bg-purple-50 text-purple-950 border border-purple-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer text-left min-w-0"
-              >
-                <Bell className="w-3.5 h-3.5 text-purple-600 shrink-0 animate-bounce" />
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="truncate">ทดสอบ Toast แจ้งอัปเดต</span>
-                  <span className="text-[10px] font-medium text-slate-500 truncate">ปุ่มรีเฟรชทันที</span>
-                </div>
-              </button>
+            {/* Test & Simulation Controls */}
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-300 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Bell className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>เครื่องมือทดสอบการแจ้งเตือน (Testing Sandbox)</span>
+                </span>
+                <span className="text-xs text-slate-500 font-medium">ทดสอบระบบ Toast Notification</span>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => simulateLiveUpdate('v1.2.0')}
-                className="flex items-center gap-2 p-3 bg-white hover:bg-amber-50 text-amber-950 border border-amber-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer text-left min-w-0"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-spin" />
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="truncate">ทดสอบ Auto-Update</span>
-                  <span className="text-[10px] font-medium text-slate-500 truncate">จำลองรีเฟรชหน้าจอ</span>
-                </div>
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => simulateUpdatePrompt('v1.2.0')}
+                  className="flex items-center gap-2 p-3 bg-white hover:bg-purple-50 text-purple-950 border border-purple-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer text-left min-w-0"
+                >
+                  <Bell className="w-3.5 h-3.5 text-purple-600 shrink-0 animate-bounce" />
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="truncate">ทดสอบ Toast แจ้งอัปเดต</span>
+                    <span className="text-[10px] font-medium text-slate-500 truncate">ปุ่มรีเฟรชทันที</span>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => simulateFirstLaunch('v1.1.0')}
-                className="flex items-center gap-2 p-3 bg-white hover:bg-emerald-50 text-emerald-950 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer text-left min-w-0"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="truncate">ทดสอบเปิดแอปใหม่</span>
-                  <span className="text-[10px] font-medium text-slate-500 truncate">จำลอง 🎉 เวอร์ชันใหม่</span>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => simulateLiveUpdate('v1.2.0')}
+                  className="flex items-center gap-2 p-3 bg-white hover:bg-amber-50 text-amber-950 border border-amber-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer text-left min-w-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-spin" />
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="truncate">ทดสอบ Auto-Update</span>
+                    <span className="text-[10px] font-medium text-slate-500 truncate">จำลองรีเฟรชหน้าจอ</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => simulateFirstLaunch('v1.1.0')}
+                  className="flex items-center gap-2 p-3 bg-white hover:bg-emerald-50 text-emerald-950 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer text-left min-w-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="truncate">ทดสอบเปิดแอปใหม่</span>
+                    <span className="text-[10px] font-medium text-slate-500 truncate">จำลอง 🎉 เวอร์ชันใหม่</span>
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* SUBMIT BUTTONS & SYSTEM MAINTENANCE */}
         <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 bg-white/85 backdrop-blur-md p-5 rounded-2xl border-2 border-amber-400/60 shadow-2xs">
           <div className="flex items-center w-full md:w-auto">
-            <button
-              type="button"
-              onClick={handleResetClick}
-              className="w-full md:w-auto flex items-center justify-center gap-1.5 text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-2xs min-h-[40px]"
-            >
-              <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-              <span>คืนค่าการตั้งค่าเริ่มต้น</span>
-            </button>
+            {isDeveloperMode && (
+              <button
+                type="button"
+                onClick={handleResetClick}
+                className="w-full md:w-auto flex items-center justify-center gap-1.5 text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-2xs min-h-[40px]"
+              >
+                <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                <span>คืนค่าการตั้งค่าเริ่มต้น</span>
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">

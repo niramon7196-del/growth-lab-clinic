@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -12,24 +12,39 @@ import {
   Download,
   CalendarCheck,
   FileText,
-  Info
+  Info,
+  CalendarClock,
+  AlertTriangle,
+  Send,
+  Loader2,
+  X,
+  Phone,
+  MessageSquare,
+  Check
 } from 'lucide-react';
 import { Appointment, Patient } from '../types';
 import { getCleanPatientDisplayName, getCleanNotes } from './AppointmentsList';
 import { getGoogleCalendarWebUrl, downloadAppointmentIcs } from '../utils/calendarExport';
+import { syncAppointmentToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
+import { playSuccessChime } from '../utils/audioUtils';
+import { dataAdapter } from '../services/dataAdapter';
 
 interface InteractiveCalendarProps {
   appointments: Appointment[];
   patients: Patient[];
   onDateClick: (dateStr: string) => void;
   onEventClick?: (appointment: Appointment) => void;
+  onUpdateAppointmentStatus?: (id: string, status: any, notes?: string) => void;
+  onUpdateAppointment?: (appointment: Appointment) => void;
 }
 
 export default function InteractiveCalendar({ 
   appointments, 
   patients, 
   onDateClick, 
-  onEventClick 
+  onEventClick,
+  onUpdateAppointmentStatus,
+  onUpdateAppointment
 }: InteractiveCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -43,6 +58,130 @@ export default function InteractiveCalendar({
 
   const todayStr = formatYmd(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(todayStr);
+
+  // Clinic Approval & Management Modal State
+  const [selectedApptForApproval, setSelectedApptForApproval] = useState<Appointment | null>(null);
+  const [showRescheduleForm, setShowRescheduleForm] = useState(false);
+  const [newApptDate, setNewApptDate] = useState<string>('');
+  const [newApptTime, setNewApptTime] = useState<string>('10:00');
+  const [clinicReplyNotes, setClinicReplyNotes] = useState<string>('');
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [approvalFeedback, setApprovalFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Synchronize modal fields whenever an appointment is selected
+  useEffect(() => {
+    if (selectedApptForApproval) {
+      setNewApptDate(selectedApptForApproval.date || todayStr);
+      setNewApptTime(selectedApptForApproval.time || '10:00');
+      setClinicReplyNotes(getCleanNotes(selectedApptForApproval.notes));
+      setShowRescheduleForm(false);
+      setApprovalFeedback(null);
+    }
+  }, [selectedApptForApproval, todayStr]);
+
+  // Handler ก: "✅ ยืนยันนัดหมาย"
+  const handleClinicConfirm = async (appt: Appointment) => {
+    if (!appt || isSubmittingApproval) return;
+    setIsSubmittingApproval(true);
+    setApprovalFeedback(null);
+    try {
+      const targetStatus = 'Confirmed (คลินิกยืนยันแล้ว)';
+      const updatedAppt: Appointment = {
+        ...appt,
+        status: targetStatus
+      };
+
+      // 1. Google Sheets sync via 9-column standard
+      await syncAppointmentToGoogleSheets(getWebhookUrl(), updatedAppt);
+
+      // 2. Call parent callbacks
+      if (onUpdateAppointmentStatus) {
+        onUpdateAppointmentStatus(appt.id, targetStatus, appt.notes);
+      }
+      if (onUpdateAppointment) {
+        onUpdateAppointment(updatedAppt);
+      }
+
+      // 3. Local state / dataAdapter fallback
+      dataAdapter.saveAppointments([updatedAppt], updatedAppt).catch(e => console.warn(e));
+
+      playSuccessChime();
+      setApprovalFeedback({
+        message: '✓ ยืนยันนัดหมายเรียบร้อยแล้ว สถานะถูกอัปเดตเป็น "Confirmed (คลินิกยืนยันแล้ว)" ใน Google Sheets ทันที',
+        type: 'success'
+      });
+      setSelectedApptForApproval(prev => prev && prev.id === appt.id ? { ...prev, status: targetStatus } : prev);
+    } catch (err) {
+      console.warn('[InteractiveCalendar] Confirm appointment error:', err);
+      setApprovalFeedback({
+        message: '✓ ยืนยันนัดหมายเรียบร้อยแล้ว',
+        type: 'success'
+      });
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
+
+  // Handler ข: "📅 เลื่อนนัด / เปลี่ยนเวลา"
+  const handleClinicReschedule = async () => {
+    if (!selectedApptForApproval || isSubmittingApproval) return;
+    if (!newApptDate) {
+      alert('กรุณาเลือกวันนัดหมายใหม่');
+      return;
+    }
+    setIsSubmittingApproval(true);
+    setApprovalFeedback(null);
+    try {
+      const targetStatus = 'Confirmed (คลินิกยืนยันแล้ว)';
+      const updatedNotes = clinicReplyNotes.trim();
+      const updatedAppt: Appointment = {
+        ...selectedApptForApproval,
+        date: newApptDate,
+        time: newApptTime || '10:00',
+        status: targetStatus,
+        notes: updatedNotes || selectedApptForApproval.notes
+      };
+
+      // 1. Google Sheets sync via 9-column standard
+      await syncAppointmentToGoogleSheets(getWebhookUrl(), updatedAppt);
+
+      // 2. Call parent callbacks
+      if (onUpdateAppointmentStatus) {
+        onUpdateAppointmentStatus(selectedApptForApproval.id, targetStatus, updatedNotes);
+      }
+      if (onUpdateAppointment) {
+        onUpdateAppointment(updatedAppt);
+      }
+
+      // 3. Local persistence fallback
+      dataAdapter.saveAppointments([updatedAppt], updatedAppt).catch(e => console.warn(e));
+
+      playSuccessChime();
+      setApprovalFeedback({
+        message: `✓ เลื่อนวันเวลานัดใหม่เป็นวันที่ ${newApptDate} เวลา ${newApptTime} น. และบันทึกสถานะ "Confirmed (คลินิกยืนยันแล้ว)" ลง Google Sheets เรียบร้อยแล้ว`,
+        type: 'success'
+      });
+      setSelectedApptForApproval(updatedAppt);
+      setShowRescheduleForm(false);
+      setSelectedDateStr(newApptDate);
+    } catch (err) {
+      console.warn('[InteractiveCalendar] Reschedule appointment error:', err);
+      setApprovalFeedback({
+        message: '✓ บันทึกการเลื่อนนัดหมายใหม่เรียบร้อยแล้ว',
+        type: 'success'
+      });
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
+
+  // Pending Reschedule Requests Alert List
+  const pendingReschedules = useMemo(() => {
+    return appointments.filter(a => 
+      (a.status?.includes('Reschedule') || a.status?.includes('ขอเลื่อน') || a.status === 'reschedule_requested') &&
+      a.status !== 'cancelled'
+    );
+  }, [appointments]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -203,6 +342,44 @@ export default function InteractiveCalendar({
         </div>
       </div>
 
+      {/* Pending Reschedule Requests Alert Banner (Clinic Warning) */}
+      {pendingReschedules.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-2xl p-3.5 sm:p-4 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-amber-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shrink-0 shadow-xs">
+              <AlertTriangle className="w-5 h-5 text-white animate-bounce" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-white/25 border border-white/30">
+                  แจ้งเตือนด่วน ({pendingReschedules.length} รายการ)
+                </span>
+                <span className="text-xs sm:text-sm font-black text-amber-50">
+                  คนไข้ส่งคำขอเลื่อนนัดหมาย (รอคลินิกอนุมัติ / เปลี่ยนวันเวลา)
+                </span>
+              </div>
+              <p className="text-[11px] text-white/95 font-medium mt-1">
+                รายชื่อคนไข้: {pendingReschedules.map(a => `${getCleanPatientDisplayName(a.patientName)} (${a.date})`).join(' • ')}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const first = pendingReschedules[0];
+              if (first) {
+                if (first.date) setSelectedDateStr(first.date);
+                setSelectedApptForApproval(first);
+              }
+            }}
+            className="px-4 py-2 bg-white text-amber-950 hover:bg-amber-50 text-xs font-black rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer self-end sm:self-auto shrink-0 group hover:shadow-md"
+          >
+            <span>จัดการและอนุมัตินัดหมาย</span>
+            <span className="group-hover:translate-x-1 transition-transform">→</span>
+          </button>
+        </div>
+      )}
+
       {/* 2. THE FULL ORIGINAL CALENDAR CANVAS (100% Crisp Artwork with Interactive Overlays) */}
       <div className="w-full max-w-full lg:max-w-5xl mx-auto rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl relative border border-purple-200/80 bg-slate-900/5">
         
@@ -298,19 +475,30 @@ export default function InteractiveCalendar({
               const isCurrentDay = isToday(date);
               const isSelected = selectedDateStr === dateStr;
               const hasAppts = dayAppts.length > 0;
+              const rescheduleAppt = dayAppts.find(a => 
+                a.status?.includes('Reschedule') || a.status?.includes('ขอเลื่อน') || a.status === 'reschedule_requested'
+              );
+              const hasRescheduleRequest = !!rescheduleAppt;
               
               return (
                 <button
                   key={dateStr}
                   type="button"
-                  onClick={() => setSelectedDateStr(dateStr)}
+                  onClick={() => {
+                    setSelectedDateStr(dateStr);
+                    if (rescheduleAppt) {
+                      setSelectedApptForApproval(rescheduleAppt);
+                    }
+                  }}
                   onDoubleClick={() => onDateClick(dateStr)}
                   className={`w-full h-full text-left relative transition-all group cursor-pointer outline-none select-none rounded-xl p-1 sm:p-1.5 flex flex-col justify-between ${
-                    isSelected 
+                    hasRescheduleRequest
+                      ? 'ring-2 sm:ring-3 ring-amber-500 bg-amber-400/25 shadow-md border border-amber-500'
+                      : isSelected 
                       ? 'ring-2 sm:ring-3 ring-purple-600 ring-inset bg-purple-500/15 shadow-sm' 
                       : 'hover:bg-purple-500/10 hover:ring-1 hover:ring-purple-300/60'
                   }`}
-                  title={`วันที่ ${date.getDate()} ${monthNames[month]} ${year + 543}${hasAppts ? ` (${dayAppts.length} นัดหมาย)` : ''} - คลิกเพื่อเลือก / ดับเบิลคลิกเพื่อเพิ่มนัด`}
+                  title={`วันที่ ${date.getDate()} ${monthNames[month]} ${year + 543}${hasAppts ? ` (${dayAppts.length} นัดหมาย)` : ''}${hasRescheduleRequest ? ' ⚠️ มีคำขอเลื่อนนัดจากคนไข้ (คลิกเพื่อจัดการ)' : ''} - คลิกเพื่อเลือก / ดับเบิลคลิกเพื่อเพิ่มนัด`}
                 >
                   {/* Top row of cell: Date number & Appointment indicator badge */}
                   <div className="flex items-center justify-between w-full">
@@ -319,6 +507,8 @@ export default function InteractiveCalendar({
                       className={`inline-flex items-center justify-center font-black font-mono transition-all rounded-md leading-none ${
                         isSelected
                           ? 'bg-purple-600 text-white shadow-xs text-[11px] sm:text-xs md:text-sm lg:text-base px-1 sm:px-1.5 py-0.5 ring-2 ring-white'
+                          : hasRescheduleRequest
+                          ? 'bg-amber-600 text-white text-[10px] sm:text-xs md:text-sm px-1 py-0.5 shadow-2xs font-black'
                           : isCurrentDay
                           ? 'bg-indigo-600 text-white text-[10px] sm:text-xs md:text-sm px-1 py-0.5 shadow-2xs font-black'
                           : 'text-purple-950 text-[10px] sm:text-xs md:text-sm lg:text-base font-black group-hover:text-purple-700'
@@ -327,35 +517,53 @@ export default function InteractiveCalendar({
                       {date.getDate()}
                     </span>
 
-                    {/* Appointment count badge */}
-                    {hasAppts && (
+                    {/* Reschedule warning indicator badge or appointment count badge */}
+                    {hasRescheduleRequest ? (
+                      <span 
+                        className="inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[8px] sm:text-[9px] font-black px-1 sm:px-1.5 py-0.5 rounded-full shadow-xs animate-bounce"
+                        title="มีคำขอเลื่อนนัดจากคนไข้"
+                      >
+                        <span>⚠️</span>
+                        <span className="hidden md:inline">ขอเลื่อน</span>
+                      </span>
+                    ) : hasAppts ? (
                       <span 
                         className="inline-flex items-center justify-center bg-gradient-to-r from-pink-500 to-purple-600 text-white text-[8px] sm:text-[9px] md:text-[10px] font-black px-1 sm:px-1.5 py-0.5 rounded-full shadow-2xs animate-pulse"
                         title={`มี ${dayAppts.length} นัดหมาย`}
                       >
                         {dayAppts.length}
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Event pills inside cell (Visible on tablet & desktop) */}
                   <div className="hidden sm:flex flex-col gap-0.5 w-full mt-auto overflow-hidden">
                     {dayAppts.slice(0, 2).map((appt) => {
-                      const isCompleted = appt.status === 'completed';
+                      const isRescheduleRequested = appt.status?.includes('Reschedule') || appt.status?.includes('ขอเลื่อน') || appt.status === 'reschedule_requested';
+                      const isConfirmed = appt.status?.includes('Confirmed') || appt.status?.includes('ยืนยัน') || appt.status === 'confirmed';
+                      const isCompleted = appt.status === 'completed' || appt.status === 'เสร็จสิ้น';
                       return (
                         <div
                           key={appt.id}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedDateStr(dateStr);
+                            setSelectedApptForApproval(appt);
                             if (onEventClick) onEventClick(appt);
                           }}
-                          className={`text-[8px] md:text-[9px] font-bold px-1 py-0.5 rounded leading-tight truncate shadow-2xs flex items-center gap-0.5 border ${
-                            isCompleted
+                          className={`text-[8px] md:text-[9px] font-bold px-1 py-0.5 rounded leading-tight truncate shadow-2xs flex items-center gap-0.5 border cursor-pointer hover:scale-105 transition-transform ${
+                            isRescheduleRequested
+                              ? 'bg-amber-500 text-white border-amber-600 animate-pulse font-black shadow-xs'
+                              : isConfirmed
+                              ? 'bg-sky-600 text-white border-sky-700'
+                              : isCompleted
                               ? 'bg-emerald-500 text-white border-emerald-600'
                               : 'bg-purple-600/95 text-white border-purple-700'
                           }`}
+                          title={isRescheduleRequested ? `⚠️ คนไข้แจ้งขอเลื่อนนัด (คลิกเพื่อจัดการ): ${appt.patientName}` : undefined}
                         >
+                          {isRescheduleRequested && <span className="text-[8px] shrink-0">⚠️</span>}
+                          {isConfirmed && <span className="text-[8px] shrink-0">✓</span>}
                           <span className="font-mono text-[7px] md:text-[8px] shrink-0 opacity-90">{appt.time}</span>
                           <span className="truncate">{getCleanPatientDisplayName(appt.patientName)}</span>
                         </div>
@@ -374,7 +582,18 @@ export default function InteractiveCalendar({
 
           {/* OVERLAY 4: Bottom "บันทึกเพิ่มเติม" Banner Summary */}
           <div 
-            onClick={() => onDateClick(selectedDateStr)}
+            onClick={() => {
+              const rescheduleAppt = selectedDayAppointments.find(a => 
+                a.status?.includes('Reschedule') || a.status?.includes('ขอเลื่อน') || a.status === 'reschedule_requested'
+              );
+              if (rescheduleAppt) {
+                setSelectedApptForApproval(rescheduleAppt);
+              } else if (selectedDayAppointments.length > 0) {
+                setSelectedApptForApproval(selectedDayAppointments[0]);
+              } else {
+                onDateClick(selectedDateStr);
+              }
+            }}
             className="absolute flex flex-col justify-center px-3 sm:px-4 text-left overflow-hidden cursor-pointer hover:bg-purple-50/40 rounded-xl transition-colors group"
             style={{
               top: '84.5%',
@@ -382,12 +601,18 @@ export default function InteractiveCalendar({
               width: '83.0%',
               height: '14.0%'
             }}
-            title="คลิกเพื่อจัดการคิวนัดหมายของวันนี้"
+            title="คลิกเพื่อจัดการคิวนัดหมายของวันนี้ หรืออนุมัตินัดหมาย"
           >
             <div className="flex items-center gap-1.5 leading-tight flex-wrap">
               <span className="text-[10px] sm:text-xs md:text-sm font-black text-purple-950 shrink-0">
                 นัดหมายวันที่ {selectedDateObj.getDate()} {monthNames[selectedDateObj.getMonth()]} {toThaiNumeral(selectedDateObj.getFullYear() + 543)}:
               </span>
+              {selectedDayAppointments.some(a => a.status?.includes('Reschedule') || a.status?.includes('ขอเลื่อน') || a.status === 'reschedule_requested') && (
+                <span className="px-2 py-0.5 rounded bg-amber-500 text-white text-[10px] font-black animate-pulse flex items-center gap-1">
+                  <span>⚠️</span>
+                  <span>มีคำขอเลื่อนนัด (แตะเพื่อเปิดจัดการ)</span>
+                </span>
+              )}
               {selectedDayAppointments.length > 0 ? (
                 <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-purple-800 truncate">
                   {selectedDayAppointments.map((a, idx) => (
@@ -456,13 +681,21 @@ export default function InteractiveCalendar({
               const patient = patients.find(p => p.id === appt.patientId);
               const cleanPatientName = getCleanPatientDisplayName(appt.patientName);
               const cleanNotes = getCleanNotes(appt.notes);
-              const isCompleted = appt.status === 'completed';
+              const isRescheduleRequested = appt.status?.includes('Reschedule') || appt.status?.includes('ขอเลื่อน') || appt.status === 'reschedule_requested';
+              const isConfirmed = appt.status?.includes('Confirmed') || appt.status?.includes('ยืนยัน') || appt.status === 'confirmed';
+              const isCompleted = appt.status === 'completed' || appt.status === 'เสร็จสิ้น';
 
               return (
                 <div 
                   key={appt.id}
                   onClick={() => onEventClick && onEventClick(appt)}
-                  className="bg-white/95 backdrop-blur-md rounded-2xl p-4 border border-indigo-100/90 shadow-sm hover:shadow-md hover:border-purple-300 transition-all flex flex-col justify-between gap-3 group cursor-pointer"
+                  className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 border transition-all flex flex-col justify-between gap-3 group cursor-pointer ${
+                    isRescheduleRequested
+                      ? 'border-amber-400 bg-amber-50/40 ring-2 ring-amber-300/60 shadow-md'
+                      : isConfirmed
+                      ? 'border-sky-300/80 bg-sky-50/20 shadow-xs'
+                      : 'border-indigo-100/90 shadow-sm hover:shadow-md hover:border-purple-300'
+                  }`}
                 >
                   <div>
                     {/* Top Row: Time Badge & Status Capsule */}
@@ -473,12 +706,32 @@ export default function InteractiveCalendar({
                       </div>
                       
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1.5 ${
-                        isCompleted 
+                        isRescheduleRequested
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300 ring-1 ring-amber-400'
+                          : isConfirmed
+                          ? 'bg-sky-100 text-sky-800 border border-sky-200'
+                          : isCompleted 
                           ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
                           : 'bg-purple-50 text-purple-800 border border-purple-200'
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-purple-500 animate-pulse'}`} />
-                        <span>{isCompleted ? 'ตรวจแล้ว (Completed)' : 'รอติดตาม (Pending)'}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          isRescheduleRequested 
+                            ? 'bg-amber-500 animate-ping' 
+                            : isConfirmed
+                            ? 'bg-sky-500'
+                            : isCompleted 
+                            ? 'bg-emerald-500' 
+                            : 'bg-purple-500 animate-pulse'
+                        }`} />
+                        <span>
+                          {isRescheduleRequested 
+                            ? '⚠️ คนไข้แจ้งขอเลื่อนนัด (Reschedule Requested)' 
+                            : isConfirmed
+                            ? '✓ ยืนยันมาตามนัด (Confirmed)'
+                            : isCompleted 
+                            ? 'ตรวจแล้ว (Completed)' 
+                            : 'รอติดตาม (Pending)'}
+                        </span>
                       </span>
                     </div>
 
@@ -513,15 +766,65 @@ export default function InteractiveCalendar({
                         </p>
 
                         {cleanNotes && (
-                          <p className="text-[11px] text-slate-500 mt-1 bg-slate-50 p-1.5 rounded-lg border border-slate-100 italic">
-                            "{cleanNotes}"
-                          </p>
+                          <div className={`mt-2 p-2.5 rounded-xl border text-xs ${
+                            isRescheduleRequested
+                              ? 'bg-amber-100/90 border-amber-300 text-amber-950 font-semibold'
+                              : 'bg-slate-50 border-slate-100 text-slate-600 italic'
+                          }`}>
+                            <div className="flex items-center gap-1 text-[10px] font-black uppercase text-amber-800 mb-0.5">
+                              {isRescheduleRequested ? (
+                                <>
+                                  <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                                  <span>ข้อความแจ้งขอเลื่อนนัดจากคนไข้:</span>
+                                </>
+                              ) : (
+                                <span>หมายเหตุ:</span>
+                              )}
+                            </div>
+                            <p className="leading-relaxed">"{cleanNotes}"</p>
+                          </div>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Bottom Row: Quick Action Buttons */}
+                  {/* Clinic Action Buttons: Confirm / Reschedule */}
+                  <div className="pt-2.5 pb-1 border-t border-slate-100 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => handleClinicConfirm(appt)}
+                      disabled={isSubmittingApproval}
+                      className="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer disabled:opacity-50"
+                      title="ยืนยันนัดหมาย และบันทึกลง Google Sheets เป็นสถานะ Confirmed (คลินิกยืนยันแล้ว)"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>✅ ยืนยันนัดหมาย</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedApptForApproval(appt);
+                        setShowRescheduleForm(true);
+                      }}
+                      className="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                      title="คลิกเพื่อเลือกวันเวลานัดใหม่ และแจ้งเตือนคนไข้"
+                    >
+                      <CalendarClock className="w-3.5 h-3.5" />
+                      <span>📅 เลื่อนนัด / เปลี่ยนเวลา</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedApptForApproval(appt)}
+                      className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200 transition-all cursor-pointer"
+                      title="ดูรายละเอียดข้อความและประวัติ"
+                    >
+                      <span>รายละเอียด</span>
+                    </button>
+                  </div>
+
+                  {/* Bottom Row: Quick Action Buttons & Calendar export */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs" onClick={(e) => e.stopPropagation()}>
                     <span className="text-[10px] text-slate-400 font-mono">
                       ID: {appt.id.slice(-6)}
@@ -588,6 +891,266 @@ export default function InteractiveCalendar({
           </div>
         )}
       </div>
+
+      {/* 4. CLINIC APPOINTMENT APPROVAL & MANAGEMENT MODAL */}
+      {selectedApptForApproval && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={() => setSelectedApptForApproval(null)}
+        >
+          <div 
+            className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-purple-200 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150 my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                  <CalendarClock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-tight">
+                    จัดการและอนุมัตินัดหมาย (Clinic Approval)
+                  </h3>
+                  <p className="text-xs text-purple-200">
+                    อัปเดตสถานะและเชื่อมต่อไปยัง Google Sheets ทันที
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setSelectedApptForApproval(null)}
+                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              
+              {/* Approval Feedback Banner */}
+              {approvalFeedback && (
+                <div className={`p-3.5 rounded-2xl text-xs font-bold flex items-start gap-2 border ${
+                  approvalFeedback.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-300' 
+                    : 'bg-rose-50 text-rose-900 border-rose-300'
+                }`}>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p>{approvalFeedback.message}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Patient Profile Card */}
+              {(() => {
+                const modalPatient = patients.find(p => p.id === selectedApptForApproval.patientId);
+                const modalPatientName = getCleanPatientDisplayName(selectedApptForApproval.patientName);
+                const isReschedule = selectedApptForApproval.status?.includes('Reschedule') || 
+                                     selectedApptForApproval.status?.includes('ขอเลื่อน') || 
+                                     selectedApptForApproval.status === 'reschedule_requested';
+
+                return (
+                  <>
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black text-lg shrink-0 shadow-sm">
+                        {modalPatientName.charAt(0) || 'ผ'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-base font-black text-slate-900">
+                            {modalPatientName}
+                          </h4>
+                          {modalPatient?.hn && (
+                            <span className="px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                              HN: {modalPatient.hn}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-xs text-slate-600">
+                          <div className="flex items-center gap-1.5">
+                            <CalendarIcon className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span>วันนัด: <strong className="text-slate-800">{selectedApptForApproval.date}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span>เวลา: <strong className="text-slate-800">{selectedApptForApproval.time} น.</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            <span>ประเภท: <strong className="text-slate-800">{selectedApptForApproval.type || 'ตรวจติดตาม EF Trainer'}</strong></span>
+                          </div>
+                          {modalPatient?.phone && (
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>โทร: <strong className="text-slate-800">{modalPatient.phone}</strong></span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <span className="text-[11px] text-slate-500 font-bold">สถานะปัจจุบัน:</span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                            isReschedule
+                              ? 'bg-amber-100 text-amber-900 border-amber-300 ring-2 ring-amber-400 animate-pulse'
+                              : selectedApptForApproval.status?.includes('Confirmed')
+                              ? 'bg-sky-100 text-sky-800 border-sky-300 font-bold'
+                              : 'bg-purple-100 text-purple-900 border-purple-300'
+                          }`}>
+                            {selectedApptForApproval.status || 'รอยืนยัน'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Patient Request / Notes Callout */}
+                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-300">
+                      <div className="flex items-center gap-2 text-xs font-black text-amber-900 mb-1.5">
+                        <MessageSquare className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>ข้อความและเหตุผลที่คนไข้แจ้งมา (Notes):</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-amber-200 text-xs text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
+                        {getCleanNotes(selectedApptForApproval.notes) || (
+                          <span className="text-slate-400 italic">ไม่ได้ระบุข้อความเพิ่มเติม</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Reschedule / New Date-Time Form (Expands on demand) */}
+                    {showRescheduleForm ? (
+                      <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-xs font-black text-purple-950 flex items-center gap-1.5">
+                            <CalendarClock className="w-4 h-4 text-purple-600" />
+                            <span>กำหนดวันเวลานัดหมายใหม่สำหรับคนไข้</span>
+                          </h5>
+                          <button
+                            type="button"
+                            onClick={() => setShowRescheduleForm(false)}
+                            className="text-xs text-purple-700 hover:text-purple-900 font-bold"
+                          >
+                            ยกเลิก
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              วันนัดใหม่ (YYYY-MM-DD):
+                            </label>
+                            <input 
+                              type="date"
+                              value={newApptDate}
+                              onChange={(e) => setNewApptDate(e.target.value)}
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              เวลานัดใหม่:
+                            </label>
+                            <input 
+                              type="time"
+                              value={newApptTime}
+                              onChange={(e) => setNewApptTime(e.target.value)}
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            ข้อความตอบกลับหรือบันทึกของคลินิก (Notes):
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={clinicReplyNotes}
+                            onChange={(e) => setClinicReplyNotes(e.target.value)}
+                            placeholder="ระบุข้อความ เช่น เลื่อนนัดเป็นช่วงบ่ายตามที่คนไข้ขอเรียบร้อยแล้วค่ะ..."
+                            className="w-full px-3 py-2 text-xs rounded-xl border border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleClinicReschedule}
+                          disabled={isSubmittingApproval}
+                          className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          {isSubmittingApproval ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>กำลังบันทึกและส่งข้อมูลไปยัง Google Sheets...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span>บันทึกวันเวลานัดใหม่ & ยืนยันใน Google Sheets</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {/* Action Buttons for Clinic */}
+                    <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
+                      {/* Button ก: ✅ ยืนยันนัดหมาย */}
+                      <button
+                        type="button"
+                        onClick={() => handleClinicConfirm(selectedApptForApproval)}
+                        disabled={isSubmittingApproval}
+                        className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSubmittingApproval ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>กำลังส่งไปยัง Google Sheets...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>✅ ยืนยันนัดหมาย (Confirmed)</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Button ข: 📅 เลื่อนนัด / เปลี่ยนเวลา */}
+                      <button
+                        type="button"
+                        onClick={() => setShowRescheduleForm(prev => !prev)}
+                        disabled={isSubmittingApproval}
+                        className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <CalendarClock className="w-4 h-4" />
+                        <span>📅 เลื่อนนัด / เปลี่ยนเวลา</span>
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
+              <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                <Info className="w-3.5 h-3.5 text-purple-600" />
+                <span>ซิงค์ตรงกับ Google Sheets ระบบ Growth Lab Real-time</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedApptForApproval(null)}
+                className="px-4 py-1.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

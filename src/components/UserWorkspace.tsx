@@ -476,7 +476,7 @@ export default function UserWorkspace({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="space-y-6 text-left max-w-7xl mx-auto pb-12"
+      className="space-y-6 text-left w-full max-w-full overflow-x-hidden box-border pb-12"
     >
       {/* 1. TOP NAVIGATION & PATIENT HERO CARD */}
       <div className="space-y-4">

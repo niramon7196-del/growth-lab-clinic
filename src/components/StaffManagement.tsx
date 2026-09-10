@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   UserPlus, 
@@ -43,7 +43,7 @@ export const MODULE_OPTIONS = [
   { id: 'วิดีโอ', label: 'วิดีโอสาธิต (Video Hub)' },
   { id: 'รายงาน', label: 'รายงาน (Reports & PDF)' },
   { id: 'การแจ้งเตือน', label: 'การแจ้งเตือน (Notifications)' },
-  { id: 'Clinical Source', label: 'เอกสารอ้างอิงทางคลินิก' },
+  { id: 'Clinical Source', label: 'เอกสารสำคัญโครงการ (Clinical Dossier)' },
   { id: 'ตั้งค่า', label: 'ตั้งค่าระบบ (Settings)' },
   { id: 'ข้อมูลคลินิก', label: 'ข้อมูลคลินิกและโปรไฟล์แพทย์' },
   { id: 'บุคลากร', label: 'จัดการบุคลากร (Staff)' },
@@ -72,6 +72,31 @@ export const DEFAULT_FULL_PERMISSIONS: Record<string, boolean> = {
   'บุคลากร': true,
   'คู่มือ': true,
   'คู่มือการใช้งาน': true,
+};
+
+/**
+ * Filter utility to identify System Developer accounts
+ * (e.g., position is "System Developer" or email is "niramon7196@gmail.com")
+ */
+export const isDeveloperStaffAccount = (staff: StaffAccount | null | undefined): boolean => {
+  if (!staff) return false;
+  const email = (staff.email || '').toLowerCase().trim();
+  const position = (staff.position || '').toLowerCase().trim();
+  const role = (staff.role || '').toUpperCase().trim();
+  const username = (staff.username || '').toLowerCase().trim();
+  const name = (staff.name || '').toLowerCase().trim();
+  const id = (staff.id || '').toLowerCase().trim();
+
+  return (
+    email === 'niramon7196@gmail.com' ||
+    position.includes('system developer') ||
+    position.includes('developer') ||
+    role === 'DEVELOPER' ||
+    username === 'dev' ||
+    id === 'stf_dev' ||
+    name.includes('system developer') ||
+    name.includes('ผู้พัฒนาระบบ')
+  );
 };
 
 export interface StaffManagementProps {
@@ -282,21 +307,29 @@ export default function StaffManagement({
     setStaffToDelete(null);
   };
 
-  const filteredStaff = staffAccounts.filter(staff => {
-    const fullName = staff.name || `${staff.firstName || ''} ${staff.lastName || ''}`;
-    const matchesSearch = 
-      fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (staff.nickname && staff.nickname.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (staff.username && staff.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (staff.phone && staff.phone.includes(searchTerm)) ||
-      (staff.email && staff.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (staff.position && staff.position.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filter out developer accounts (Position: "System Developer" or Email: "niramon7196@gmail.com")
+  // Ensures this table strictly displays only clinic personnel (Doctors, Assistants, Receptionists, Clinic Admins)
+  const visibleClinicStaff = useMemo(() => {
+    return (staffAccounts || []).filter(staff => !isDeveloperStaffAccount(staff));
+  }, [staffAccounts]);
 
-    const matchesPosition = selectedPositionFilter === 'all' || staff.position === selectedPositionFilter;
-    const matchesStatus = selectedStatusFilter === 'all' || staff.status === selectedStatusFilter;
+  const filteredStaff = useMemo(() => {
+    return visibleClinicStaff.filter(staff => {
+      const fullName = staff.name || `${staff.firstName || ''} ${staff.lastName || ''}`;
+      const matchesSearch = 
+        fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (staff.nickname && staff.nickname.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (staff.username && staff.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (staff.phone && staff.phone.includes(searchTerm)) ||
+        (staff.email && staff.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (staff.position && staff.position.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchesSearch && matchesPosition && matchesStatus;
-  });
+      const matchesPosition = selectedPositionFilter === 'all' || staff.position === selectedPositionFilter;
+      const matchesStatus = selectedStatusFilter === 'all' || staff.status === selectedStatusFilter;
+
+      return matchesSearch && matchesPosition && matchesStatus;
+    });
+  }, [visibleClinicStaff, searchTerm, selectedPositionFilter, selectedStatusFilter]);
 
   const getPositionBadge = (pos: string) => {
     switch (pos) {

@@ -1,5 +1,14 @@
 import { parseAndCleanAssignedTasks, sanitizeTaskCode } from '../utils/cleanTasks';
 import { detectGenderFromPatientData } from '../utils/patientUtils';
+import { 
+  routeAppointmentToGoogleSheets, 
+  dataRouter, 
+  formatAppointment9Columns, 
+  APPOINTMENT_COLUMNS, 
+  APPOINTMENT_SHEET_NAME 
+} from './dataRouter';
+
+export { dataRouter, routeAppointmentToGoogleSheets, formatAppointment9Columns, APPOINTMENT_COLUMNS, APPOINTMENT_SHEET_NAME };
 
 /**
  * Google Apps Script Integration for Growth Lab
@@ -622,6 +631,7 @@ export async function syncHomeworkToGoogleSheets(
       },
       body: JSON.stringify({
         action: 'saveExercise',
+        sheetName: 'Exercise_Logs',
         altAction: 'SAVE_DAILY_SUMMARY',
         timestamp: new Date().toISOString(),
         hn: payload.hn || payload.patientId || '',
@@ -665,6 +675,7 @@ export async function syncNutritionToGoogleSheets(
   try {
     const bodyData = {
       action: payload.action || 'บันทึกโภชนาการ GNS',
+      sheetName: 'Exercise_Logs',
       timestamp: new Date().toISOString(),
       hn: payload.hn || '',
       patientId: payload.patientId || '',
@@ -714,6 +725,7 @@ export async function syncSleepEfToGoogleSheets(
   try {
     const bodyData = {
       action: payload.action || 'บันทึกข้อมูลการนอน & EF',
+      sheetName: 'Exercise_Logs',
       timestamp: new Date().toISOString(),
       hn: payload.hn || '',
       patientId: payload.patientId || '',
@@ -763,6 +775,7 @@ export async function syncDailyCheckInToGoogleSheets(
   try {
     const bodyData = {
       action: 'logDaily',
+      sheetName: 'Exercise_Logs',
       altAction: payload.action || 'เช็คอินประจำวัน (Daily Check-in)',
       actionName: payload.actionName || 'เช็คอินประจำวัน (Daily Check-in)',
       patientId: payload.patientId || payload.hn || '',
@@ -816,6 +829,7 @@ export async function syncCleanDailySummaryToGoogleSheets(
   try {
     const payloadData = {
       action: 'SAVE_DAILY_SUMMARY',
+      sheetName: 'Exercise_Logs',
       timestamp: new Date().toISOString(),
       patientId: summaryData.patientId,
       hn: summaryData.hn,
@@ -920,52 +934,32 @@ export async function syncMonthlyAnalyticsToGoogleSheets(
 }
 
 /**
- * 12. Sync Appointment to Google Sheets (Appointments tab - Upsert)
+ * 12. Sync Appointment to Google Sheets (Appointments tab - Upsert / Create)
+ * Sends POST request to Google Apps Script Web App targeting the "Appointments" tab.
+ * Column order (100% alignment):
+ * 1. ID: Appointment ID (auto-generated or timestamp/UUID)
+ * 2. HN: Patient HN
+ * 3. PatientName: Patient full name
+ * 4. Date: Appointment date (YYYY-MM-DD)
+ * 5. Time: Appointment time (HH:MM)
+ * 6. Type: Appointment type (ตรวจติดตาม, นัดฝึก, OMT)
+ * 7. Doctor: Treating doctor name (e.g., ทันตแพทย์หญิง นภาพร วรรณษา)
+ * 8. Status: Appointment status ("นัดหมาย", "รอตรวจ", "Confirmed")
+ * 9. Notes: Additional notes
  */
 export async function syncAppointmentToGoogleSheets(
   webhookUrl: string | undefined,
   appointment: any
 ) {
-  const targetUrl = webhookUrl || getWebhookUrl();
+  const targetUrl = webhookUrl || getWebhookUrl() || API_URL;
   if (!targetUrl) {
     console.warn('[googleAppsScriptService] No webhook URL provided for appointment sync.');
-    return;
+    return { success: false, error: 'No webhook URL' };
   }
 
-  try {
-    const payloadData = {
-      action: 'saveAppointment',
-      altAction: 'SAVE_APPOINTMENT',
-      actionName: 'บันทึกนัดหมาย (Save Appointment)',
-      timestamp: new Date().toISOString(),
-      appointmentId: appointment.id,
-      patientId: appointment.patientId,
-      patientName: appointment.patientName,
-      hn: appointment.hn || appointment.patientId || '',
-      date: appointment.date,
-      time: appointment.time,
-      type: appointment.type || 'clinical',
-      notes: appointment.notes || '',
-      status: appointment.status || 'pending',
-      googleCalendarEventId: appointment.googleCalendarEventId || '',
-      googleCalendarHtmlLink: appointment.googleCalendarHtmlLink || '',
-      payload: appointment
-    };
-
-    const response = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(payloadData),
-      mode: 'no-cors'
-    });
-
-    console.log('[googleAppsScriptService] Appointment synced to Google Sheets successfully:', appointment.id, appointment.patientName);
-    return response;
-  } catch (error) {
-    console.error('[googleAppsScriptService] Failed to sync appointment to Google Sheets:', error);
-  }
+  // Strictly route via dataRouter exclusively to the "Appointments" tab
+  // Formats to the 9 columns: ID, HN, PatientName, Date, Time, Type, Doctor, Status, Notes
+  return routeAppointmentToGoogleSheets(appointment, targetUrl);
 }
 
 /**
@@ -978,12 +972,13 @@ export async function syncDeleteAppointmentToGoogleSheets(
   hn?: string,
   date?: string
 ) {
-  const targetUrl = webhookUrl || getWebhookUrl();
+  const targetUrl = webhookUrl || getWebhookUrl() || API_URL;
   if (!targetUrl || !appointmentId) return;
 
   try {
     const payloadData = {
       action: 'DELETE_APPOINTMENT',
+      altAction: 'deleteAppointment',
       actionName: 'ลบรายการนัดหมาย (Delete Appointment)',
       timestamp: new Date().toISOString(),
       appointmentId: appointmentId,
@@ -1000,14 +995,25 @@ export async function syncDeleteAppointmentToGoogleSheets(
       }
     };
 
-    const response = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(payloadData),
-      mode: 'no-cors'
-    });
+    let response: any = null;
+    try {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payloadData),
+      });
+    } catch {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payloadData),
+        mode: 'no-cors'
+      });
+    }
 
     console.log('[googleAppsScriptService] Delete Appointment synced to Google Sheets:', appointmentId);
     return response;
@@ -1070,6 +1076,8 @@ export async function fetchAppointmentsFromGoogleSheets(
   try {
     const url = new URL(targetUrl);
     url.searchParams.append('action', 'GET_APPOINTMENTS');
+    url.searchParams.append('sheetName', 'Appointments');
+    url.searchParams.append('tab', 'Appointments');
     url.searchParams.append('t', Date.now().toString());
 
     const res = await fetch(url.toString(), {

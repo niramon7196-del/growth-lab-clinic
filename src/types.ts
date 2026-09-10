@@ -7,6 +7,7 @@ export interface UserAccount {
   patientId?: string; // Only for PATIENT role
   hn?: string; // Optional HN for PATIENT role
   name: string;
+  email?: string;
   permissions?: { [key: string]: boolean };
 }
 
@@ -76,7 +77,7 @@ export interface PatientAppointmentRecord {
   time: string;
   title: string;
   dentistName?: string;
-  status?: 'pending' | 'completed' | 'cancelled';
+  status?: 'pending' | 'completed' | 'cancelled' | 'Confirmed' | 'Confirmed (ยืนยันแล้ว)' | 'Reschedule Requested' | 'Reschedule Requested (ขอเลื่อน)' | string;
   notes?: string;
 }
 
@@ -473,7 +474,7 @@ export interface Appointment {
   time: string; // HH:MM
   type: 'clinical' | 'online' | 'consultation' | string;
   notes?: string;
-  status: 'pending' | 'completed' | 'cancelled';
+  status: 'pending' | 'completed' | 'cancelled' | 'Confirmed (ยืนยันแล้ว)' | 'Reschedule Requested (ขอเลื่อน)' | string;
   googleCalendarEventId?: string;
   googleCalendarHtmlLink?: string;
   dentistName?: string;

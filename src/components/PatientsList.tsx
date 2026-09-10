@@ -683,7 +683,7 @@ export default function PatientsList({
   const onHoldCount = safePatients.filter(p => p?.status === 'on-hold').length;
 
   return (
-    <div id="patients-view" className="space-y-6 w-full max-w-full overflow-x-hidden box-border">
+    <div id="patients-view" className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden box-border">
       {/* Header Banner & Stats */}
       <div className="bg-white/80 backdrop-blur-md rounded-2xl p-5 sm:p-6 border border-slate-300/80 shadow-md">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -1079,7 +1079,7 @@ export default function PatientsList({
                             <span className="text-slate-400 text-xs font-medium pl-1">-</span>
                           )}
                           {p.parentName && (
-                            <span className="text-[11px] text-slate-500 block truncate max-w-[150px]">
+                            <span className="text-[11px] text-slate-500 block leading-tight max-w-[150px]">
                               ({p.parentName})
                             </span>
                           )}
@@ -1314,7 +1314,7 @@ export default function PatientsList({
                         </div>
                       )}
                       <div className="flex-1 min-w-0 text-left">
-                        <h3 className="font-bold text-slate-900 truncate text-sm sm:text-base group-hover:text-purple-700 transition-colors">
+                        <h3 className="font-bold text-slate-900 leading-tight text-sm sm:text-base group-hover:text-purple-700 transition-colors">
                           {info.displayName}
                         </h3>
                         <div className="flex items-center gap-1.5 flex-wrap mt-0.5">

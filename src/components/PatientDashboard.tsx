@@ -39,11 +39,16 @@ import {
   CalendarPlus,
   Share2,
   Smartphone,
-  Copy
+  Copy,
+  CalendarCheck,
+  CalendarClock,
+  Loader2,
+  Send
 } from 'lucide-react';
 import { Patient, SessionLog, Appointment, HomeworkAssignment, NutritionLog, GrowthLog, SleepLog, EFRecordLog } from '../types';
 import { VERIFIED_EXERCISES } from '../data';
 import InteractiveWorkoutPlayer, { WorkoutExerciseItem } from './InteractiveWorkoutPlayer';
+import PatientInteractiveCalendar from './PatientInteractiveCalendar';
 import { getExerciseMedia, formatVideoEmbedUrl } from '../utils/exerciseMediaManager';
 import { calculateBMI, calculateMonthlySleepSummary } from '../utils/clinicalCalculations';
 import { getParamCaseInsensitive, formatPatientDisplay } from '../utils/patientUtils';
@@ -51,6 +56,8 @@ import { calculateConsistencyMetrics } from '../utils/checkInCalculations';
 import { playSuccessChime } from '../utils/audioUtils';
 import { getPatientAssignedExercises } from '../../exerciseHelper';
 import { Logo } from './Logo';
+import { syncAppointmentToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
+import { getCleanPatientDisplayName, getCleanNotes } from './AppointmentsList';
 
 interface PatientDashboardProps {
   patient?: Patient;
@@ -63,6 +70,7 @@ interface PatientDashboardProps {
   onUpdatePatientSleep?: (patientId: string, log: SleepLog) => void;
   onUpdatePatientEfLog?: (patientId: string, log: EFRecordLog) => void;
   onCheckIn?: (patientId: string, source?: 'APP' | 'QR') => void;
+  onUpdateAppointmentStatus?: (id: string, status: string, notes?: string) => void;
 }
 
 export function getExerciseTitle(input: string): string {
@@ -145,7 +153,8 @@ export default function PatientDashboard({
   onUpdatePatientAssignments,
   onUpdatePatientSleep,
   onUpdatePatientEfLog,
-  onCheckIn
+  onCheckIn,
+  onUpdateAppointmentStatus
 }: PatientDashboardProps) {
   // Quick Action Modal States
   const [showNutritionModal, setShowNutritionModal] = useState(false);
@@ -173,6 +182,10 @@ export default function PatientDashboard({
   };
 
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+
+  const currentAssignments = React.useMemo(() => {
+    return getPatientAssignedExercises(VERIFIED_EXERCISES, patient);
+  }, [patient]);
 
   // Daily Check-in State
   const todayStr = new Date().toISOString().split('T')[0];
@@ -448,7 +461,6 @@ export default function PatientDashboard({
       const map2 = saved2 ? JSON.parse(saved2) : {};
       
       const assignmentsMap: Record<string, boolean> = {};
-      const currentAssignments = getPatientAssignedExercises(VERIFIED_EXERCISES, patient);
       currentAssignments.forEach((a: any) => {
         if (a.status === 'completed') {
           assignmentsMap[a.id] = true;
@@ -495,7 +507,6 @@ export default function PatientDashboard({
 
   const isOmtDoneToday = Boolean(completedExercisesMap['omt_done_today']) || (() => {
     if (!patient) return false;
-    const currentAssignments = getPatientAssignedExercises(VERIFIED_EXERCISES, patient);
     if (currentAssignments.length === 0) return false;
     return currentAssignments.some((a: any) => a.status === 'completed' || completedExercisesMap[a.id] || completedExercisesMap[a.exerciseId] || completedExercisesMap[a.assignmentId]);
   })();
@@ -567,7 +578,6 @@ export default function PatientDashboard({
       sheetName: 'Exercise_Logs'
     }).catch(e => console.warn('[PatientDashboard] cloudApi.saveExercise OMT error:', e));
 
-    const currentAssignments = getPatientAssignedExercises(VERIFIED_EXERCISES, patient);
     if (onUpdatePatientAssignments) {
       const updated = currentAssignments.map((a: any) => (a.id === assignId || a.assignmentId === assignId) ? { ...a, status: 'completed' as const } : a);
       onUpdatePatientAssignments(patient.id, updated);
@@ -647,7 +657,6 @@ export default function PatientDashboard({
     const unique = Array.from(new Map(combined.map(item => [item.id || item.date, item])).values());
     return unique.filter(a => a.status !== 'cancelled').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [appointments, patient]);
-  const nextAppointment = patientAppointments.find(a => a.status === 'pending') || patientAppointments[0];
 
   const age = patient.age || 8;
   const isKidTier = age < 15;
@@ -685,12 +694,8 @@ export default function PatientDashboard({
 
   const consistencyMetrics = useMemo(() => calculateConsistencyMetrics(patient), [patient]);
 
-  const homeworkAssignments = useMemo(() => {
-    if (!patient) return [];
-    return getPatientAssignedExercises(VERIFIED_EXERCISES, patient);
-  }, [patient]);
-  const totalHomework = homeworkAssignments.length;
-  const completedHomework = homeworkAssignments.filter((a: any) => a.status === 'completed' || completedExercisesMap[a.id] || completedExercisesMap[a.exerciseId] || completedExercisesMap[a.assignmentId]).length;
+  const totalHomework = currentAssignments.length;
+  const completedHomework = currentAssignments.filter((a: any) => a.status === 'completed' || completedExercisesMap[a.id] || completedExercisesMap[a.exerciseId] || completedExercisesMap[a.assignmentId]).length;
 
   const urlName = getParamCaseInsensitive(
     typeof window !== 'undefined' ? window.location.search : '',
@@ -726,12 +731,12 @@ export default function PatientDashboard({
       {/* ========================================================================= */}
       {/* 1. Header Greeting Banner + Integrated Daily Check-in Button            */}
       {/* ========================================================================= */}
-      <div className="bg-white/80 backdrop-blur-md rounded-2xl border-2 border-amber-400/60 shadow-lg p-5 space-y-2 relative overflow-hidden">
+      <div className="bg-white/80 backdrop-blur-md rounded-2xl border-2 border-amber-400/60 shadow-lg p-4 sm:p-5 space-y-2 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 relative z-10">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <Logo className="w-16 h-auto" />
-              <span className="bg-slate-100 px-2.5 py-0.5 rounded-full text-[11px] font-bold text-slate-700 border border-slate-200">
+              <span className="bg-slate-100 px-2.5 py-0.5 rounded-full text-xs sm:text-[13px] font-bold text-slate-700 border border-slate-200">
                 HN: {hnCode}
               </span>
               <span className={patientInfo.ageGroupBadge.badgeClass}>
@@ -746,7 +751,7 @@ export default function PatientDashboard({
                 </span>
               )}
             </h1>
-            <p className="text-slate-600 text-xs font-semibold">
+            <p className="text-slate-600 text-sm font-semibold">
               อายุ: {patientInfo.ageDisplayText} • โปรแกรมประจำสัปดาห์: แผนปรับโครงสร้าง & OMT
             </p>
           </div>
@@ -754,21 +759,21 @@ export default function PatientDashboard({
           {/* Daily Check-in Button in Header */}
           <div className="shrink-0">
             {isCheckedInToday ? (
-              <div className="px-3.5 py-2 rounded-xl font-black text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs flex items-center gap-2">
+              <div className="px-3.5 py-2 rounded-xl font-black text-sm bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span>✓ เช็กอินวันนี้แล้ว</span>
-                <span className="ml-0.5 px-2 py-0.5 rounded-full bg-emerald-200 text-[10px] text-emerald-900 border border-emerald-300 font-black">
+                <span className="ml-0.5 px-2 py-0.5 rounded-full bg-emerald-200 text-[11px] sm:text-xs text-emerald-900 border border-emerald-300 font-black">
                   🔥 {streakCount} วัน
                 </span>
               </div>
             ) : (
               <button type="button"
                 onClick={() => setShowCheckInModal(true)}
-                className="px-3.5 py-2 rounded-xl font-black text-xs transition-all shadow-md cursor-pointer flex items-center gap-2 border bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-300 animate-pulse"
+                className="px-3.5 py-2 rounded-xl font-black text-sm transition-all shadow-md cursor-pointer flex items-center gap-2 border bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-300 animate-pulse"
               >
                 <Calendar className="w-4 h-4 text-slate-950" />
                 <span>📅 กดเช็กอินประจำวัน</span>
-                <span className="ml-0.5 px-2 py-0.5 rounded-full bg-black/30 text-[10px] text-amber-200 border border-white/10 font-black">
+                <span className="ml-0.5 px-2 py-0.5 rounded-full bg-black/30 text-[11px] sm:text-xs text-amber-200 border border-white/10 font-black">
                   🔥 {streakCount} วัน
                 </span>
               </button>
@@ -780,19 +785,19 @@ export default function PatientDashboard({
       {/* ========================================================================= */}
       {/* 2. Middle Section: Today's Exercise Progress Summary & Prominent CTA    */}
       {/* ========================================================================= */}
-      <div className="bg-white/80 backdrop-blur-md rounded-2xl border-2 border-amber-400/60 shadow-lg p-5 space-y-3 text-left">
+      <div className="bg-white/80 backdrop-blur-md rounded-2xl border-2 border-amber-400/60 shadow-lg p-4 sm:p-5 space-y-3 text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-purple-600 animate-ping" />
               <h2 className="text-sm sm:text-base font-black text-slate-900">🎯 สรุปความคืบหน้าการทำแบบฝึกหัดวันนี้</h2>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium">
+            <p className="text-xs sm:text-[13px] text-slate-500 font-medium">
               ติดตามผลการฝึกประจำวันตามแผนการดูแล 4 เสาหลัก
             </p>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-900 border border-purple-200 text-xs font-black shrink-0">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-900 border border-purple-200 text-sm font-black shrink-0">
             <span>วันนี้ทำไปแล้ว</span>
             <span className="text-purple-700 font-black text-sm">
               {completedHomework} จาก {totalHomework}
@@ -803,7 +808,7 @@ export default function PatientDashboard({
 
         {/* Progress Bar */}
         <div className="space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+          <div className="flex items-center justify-between text-sm font-bold text-slate-600">
             <span>ระดับความสำเร็จประจำวัน:</span>
             <span className="text-purple-700 font-black">
               {totalHomework > 0 ? Math.round((completedHomework / totalHomework) * 100) : 0}%
@@ -830,16 +835,16 @@ export default function PatientDashboard({
         </div>
 
         {/* Minimal 4 Pillars Shortcut Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t border-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1.5 border-t border-slate-100">
           <button type="button"
             onClick={() => onNavigate('แบบฝึกหัดที่ได้รับมอบหมาย_WIZARD')}
             className="p-2 sm:p-2.5 rounded-xl bg-purple-50/70 hover:bg-purple-100/80 border border-purple-200/80 transition-all text-left space-y-0.5 cursor-pointer group"
           >
-            <div className="flex items-center justify-between text-xs font-extrabold text-purple-900">
+            <div className="flex items-center justify-between text-sm font-extrabold text-purple-900">
               <span>👄 1. OMT ฝึกปาก</span>
               <ChevronRight className="w-3.5 h-3.5 text-purple-500 group-hover:translate-x-0.5 transition-transform" />
             </div>
-            <p className="text-[10px] text-purple-700 font-bold">
+            <p className="text-[11px] sm:text-xs text-purple-700 font-bold">
               {isOmtDoneToday ? '✓ ฝึกเสร็จแล้ว' : 'แตะเพื่อเข้าฝึก ➔'}
             </p>
           </button>
@@ -848,11 +853,11 @@ export default function PatientDashboard({
             onClick={() => setShowEfModal(true)}
             className="p-2 sm:p-2.5 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-200/80 transition-all text-left space-y-0.5 cursor-pointer group"
           >
-            <div className="flex items-center justify-between text-xs font-extrabold text-indigo-900">
+            <div className="flex items-center justify-between text-sm font-extrabold text-indigo-900">
               <span>🌙 2. EF & การนอน</span>
               <ChevronRight className="w-3.5 h-3.5 text-indigo-500 group-hover:translate-x-0.5 transition-transform" />
             </div>
-            <p className="text-[10px] text-indigo-700 font-bold">
+            <p className="text-[11px] sm:text-xs text-indigo-700 font-bold">
               {isEfDoneToday ? '✓ บันทึกเรียบร้อย' : 'แตะเพื่อลงบันทึก ➔'}
             </p>
           </button>
@@ -861,11 +866,11 @@ export default function PatientDashboard({
             onClick={() => setShowNutritionModal(true)}
             className="p-2 sm:p-2.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-200/80 transition-all text-left space-y-0.5 cursor-pointer group"
           >
-            <div className="flex items-center justify-between text-xs font-extrabold text-emerald-900">
+            <div className="flex items-center justify-between text-sm font-extrabold text-emerald-900">
               <span>🥗 3. GNS โภชนาการ</span>
               <ChevronRight className="w-3.5 h-3.5 text-emerald-500 group-hover:translate-x-0.5 transition-transform" />
             </div>
-            <p className="text-[10px] text-emerald-700 font-bold">
+            <p className="text-[11px] sm:text-xs text-emerald-700 font-bold">
               {isGnsDoneToday ? `✓ ${currentGnsScore}/100` : 'แตะเพื่อประเมิน ➔'}
             </p>
           </button>
@@ -874,11 +879,11 @@ export default function PatientDashboard({
             onClick={() => setShowGrowthModal(true)}
             className="p-2 sm:p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100/80 border border-amber-200/80 transition-all text-left space-y-0.5 cursor-pointer group"
           >
-            <div className="flex items-center justify-between text-xs font-extrabold text-amber-900">
+            <div className="flex items-center justify-between text-sm font-extrabold text-amber-900">
               <span>📏 4. ส่วนสูง & ท่าทาง</span>
               <ChevronRight className="w-3.5 h-3.5 text-amber-500 group-hover:translate-x-0.5 transition-transform" />
             </div>
-            <p className="text-[10px] text-amber-700 font-bold">
+            <p className="text-[11px] sm:text-xs text-amber-700 font-bold">
               {isPostureDoneToday ? '✓ อัปเดตแล้ว' : 'แตะเพื่ออัปเดต ➔'}
             </p>
           </button>
@@ -886,50 +891,13 @@ export default function PatientDashboard({
       </div>
 
       {/* ========================================================================= */}
-      {/* 2.1 Next Appointment Card (Synced with Google Sheets / Clinic)            */}
+      {/* 2.1 Full Monthly Interactive Calendar (Synced with Google Sheets / Clinic) */}
       {/* ========================================================================= */}
-      {nextAppointment && (
-        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-3.5 sm:p-4 rounded-xl border border-blue-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
-          <div className="flex items-start sm:items-center gap-3 flex-1">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div className="w-full">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-300">
-                  นัดหมายครั้งถัดไป 📅
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
-                  {nextAppointment.type === 'clinical' ? 'ตรวจสดที่คลินิก (Clinical On-site)' : (nextAppointment.type || 'ตรวจติดตาม')}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-slate-500">วันที่:</span>
-                  <span className="font-bold text-slate-900">{new Date(nextAppointment.date).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-slate-500">เวลา:</span>
-                  <span className="font-bold text-slate-900">{nextAppointment.time} น.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {nextAppointment.googleCalendarHtmlLink && (
-            <a
-              href={nextAppointment.googleCalendarHtmlLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer shrink-0"
-            >
-              <CalendarPlus className="w-3.5 h-3.5" />
-              <span>Google Calendar</span>
-            </a>
-          )}
-        </div>
-      )}
+      <PatientInteractiveCalendar
+        patient={patient}
+        appointments={appointments}
+        onUpdateAppointmentStatus={onUpdateAppointmentStatus}
+      />
 
       {/* ========================================================================= */}
       {/* 2.2 Knowledge Hub Colorful Shortcut Card (คลังความรู้สุขภาพ & เคล็ดลับ)     */}
@@ -941,35 +909,35 @@ export default function PatientDashboard({
         <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] shadow-xs">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[11px] sm:text-xs shadow-xs">
               <span>⚡ สรุปสั้น อ่านง่ายใน 30 วินาที</span>
             </div>
             <h3 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
               <span>📚 คลังความรู้ & เคล็ดลับการเติบโต (แตะเพื่ออ่าน)</span>
               <ChevronRight className="w-5 h-5 text-amber-300 group-hover:translate-x-1 transition-transform" />
             </h3>
-            <p className="text-purple-100 text-xs font-medium">
+            <p className="text-purple-100 text-sm font-medium">
               คู่มือใส่อุปกรณ์ EF • บริหารกล้ามเนื้อปาก OMT • หายใจทางจมูก 100% • โภชนาการ GNS • พฤติกรรมที่ต้องระวัง • Q&A ผู้ปกครอง
             </p>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-            <span className="px-2 py-1 rounded-lg bg-sky-500/30 text-sky-200 border border-sky-300/30 text-[10px] font-bold">
+            <span className="px-2 py-1 rounded-lg bg-sky-500/30 text-sky-200 border border-sky-300/30 text-[11px] sm:text-xs font-bold">
               🦷 EF
             </span>
-            <span className="px-2 py-1 rounded-lg bg-purple-500/30 text-purple-200 border border-purple-300/30 text-[10px] font-bold">
+            <span className="px-2 py-1 rounded-lg bg-purple-500/30 text-purple-200 border border-purple-300/30 text-[11px] sm:text-xs font-bold">
               👅 OMT
             </span>
-            <span className="px-2 py-1 rounded-lg bg-emerald-500/30 text-emerald-200 border border-emerald-300/30 text-[10px] font-bold">
+            <span className="px-2 py-1 rounded-lg bg-emerald-500/30 text-emerald-200 border border-emerald-300/30 text-[11px] sm:text-xs font-bold">
               🫁 หายใจ
             </span>
-            <span className="px-2 py-1 rounded-lg bg-amber-500/30 text-amber-200 border border-amber-300/30 text-[10px] font-bold">
+            <span className="px-2 py-1 rounded-lg bg-amber-500/30 text-amber-200 border border-amber-300/30 text-[11px] sm:text-xs font-bold">
               🥦 GNS
             </span>
-            <span className="px-2 py-1 rounded-lg bg-rose-500/30 text-rose-200 border border-rose-300/30 text-[10px] font-bold">
+            <span className="px-2 py-1 rounded-lg bg-rose-500/30 text-rose-200 border border-rose-300/30 text-[11px] sm:text-xs font-bold">
               🚫 ระวัง
             </span>
-            <span className="px-2 py-1 rounded-lg bg-yellow-400 text-slate-950 font-black text-[10px] shadow-xs">
+            <span className="px-2 py-1 rounded-lg bg-yellow-400 text-slate-950 font-black text-[11px] sm:text-xs shadow-xs">
               💡 Q&A
             </span>
           </div>
@@ -987,11 +955,11 @@ export default function PatientDashboard({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-black text-slate-900">📊 สรุปประวัติความสม่ำเสมอ (Streak 7 วัน / 30 วัน)</h2>
-              <p className="text-[11px] text-slate-500 font-medium">สถิติการเช็คอินและการฝึกย้อนหลังสะสมอย่างต่อเนื่อง</p>
+              <p className="text-xs sm:text-[13px] text-slate-500 font-medium">สถิติการเช็คอินและการฝึกย้อนหลังสะสมอย่างต่อเนื่อง</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs sm:text-[13px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               STATUS: {consistencyMetrics.status === 'ACTIVE' || isCheckedInToday ? 'ACTIVE (กำลังรับการดูแล)' : 'INACTIVE'}
             </span>
@@ -999,18 +967,18 @@ export default function PatientDashboard({
         </div>
 
         {/* 4 Cards Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {/* Card 1: Streak 7 Days */}
           <div className="p-2.5 sm:p-3 rounded-xl bg-purple-50/70 border border-purple-200/80 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-purple-900">Streak 7 วัน</span>
+              <span className="text-xs sm:text-[13px] font-extrabold text-purple-900">Streak 7 วัน</span>
               <div className="w-6 h-6 rounded-md bg-purple-600 text-white flex items-center justify-center">
                 <Calendar className="w-3.5 h-3.5" />
               </div>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-xl font-black text-purple-950">{consistencyMetrics.weeklyCount}/7</span>
-              <span className="text-[11px] font-bold text-purple-700">วัน ({consistencyMetrics.weeklyCompliancePercent}%)</span>
+              <span className="text-xs sm:text-[13px] font-bold text-purple-700">วัน ({consistencyMetrics.weeklyCompliancePercent}%)</span>
             </div>
             {/* 7-Day Sparkline Dots */}
             <div className="flex items-center gap-1 pt-0.5">
@@ -1026,7 +994,7 @@ export default function PatientDashboard({
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-purple-800 font-bold truncate">
+            <p className="text-[11px] sm:text-xs text-purple-800 font-bold leading-tight break-words">
               {consistencyMetrics.classification.categoryLabelTh}
             </p>
           </div>
@@ -1034,17 +1002,17 @@ export default function PatientDashboard({
           {/* Card 2: Streak 30 Days */}
           <div className="p-2.5 sm:p-3 rounded-xl bg-indigo-50/70 border border-indigo-200/80 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-indigo-900">Streak 30 วัน</span>
+              <span className="text-xs sm:text-[13px] font-extrabold text-indigo-900">Streak 30 วัน</span>
               <div className="w-6 h-6 rounded-md bg-indigo-600 text-white flex items-center justify-center">
                 <Award className="w-3.5 h-3.5" />
               </div>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-xl font-black text-indigo-950">{consistencyMetrics.monthlyCount}/30</span>
-              <span className="text-[11px] font-bold text-indigo-700">วัน ({consistencyMetrics.monthlyCompliancePercent}%)</span>
+              <span className="text-xs sm:text-[13px] font-bold text-indigo-700">วัน ({consistencyMetrics.monthlyCompliancePercent}%)</span>
             </div>
             <div className="flex items-center gap-1 pt-0.5">
-              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+              <span className={`px-2 py-0.5 rounded-md text-[11px] sm:text-xs font-black ${
                 consistencyMetrics.monthlyCompliancePercent >= 70 ? 'bg-amber-400 text-slate-950' : 'bg-slate-200 text-slate-700'
               }`}>
                 {consistencyMetrics.monthlyCompliancePercent >= 70 ? '🏆 เหรียญทอง (Gold)' : '🥈 เหรียญเงิน (Silver)'}
@@ -1055,16 +1023,16 @@ export default function PatientDashboard({
           {/* Card 3: App Sessions Today */}
           <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-slate-600">การเข้าใช้งานวันนี้</span>
+              <span className="text-xs sm:text-[13px] font-extrabold text-slate-600">การเข้าใช้งานวันนี้</span>
               <div className="w-6 h-6 rounded-md bg-purple-100 text-purple-700 flex items-center justify-center">
                 <Clock className="w-3.5 h-3.5" />
               </div>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-xl font-black text-slate-900">{consistencyMetrics.todayAppOpens}</span>
-              <span className="text-[11px] font-bold text-slate-500">ครั้ง</span>
+              <span className="text-xs sm:text-[13px] font-bold text-slate-500">ครั้ง</span>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium truncate">
+            <p className="text-xs sm:text-[13px] text-slate-500 font-medium leading-tight break-words">
               เช็คอินล่าสุด: {consistencyMetrics.lastCheckInDate || 'วันนี้'}
             </p>
           </div>
@@ -1072,16 +1040,16 @@ export default function PatientDashboard({
           {/* Card 4: Current Consecutive Days */}
           <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-amber-900">สะสมต่อเนื่อง</span>
+              <span className="text-xs sm:text-[13px] font-extrabold text-amber-900">สะสมต่อเนื่อง</span>
               <div className="w-6 h-6 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
                 <Flame className="w-3.5 h-3.5" />
               </div>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-xl font-black text-amber-950">{streakCount}</span>
-              <span className="text-[11px] font-bold text-amber-800">วันติด 🔥</span>
+              <span className="text-xs sm:text-[13px] font-bold text-amber-800">วันติด 🔥</span>
             </div>
-            <p className="text-[10px] text-amber-800 font-bold truncate">
+            <p className="text-[11px] sm:text-xs text-amber-800 font-bold leading-tight break-words">
               {streakCount > 0 ? 'ความสม่ำเสมอยอดเยี่ยม!' : 'เริ่มต้นวันใหม่ด้วยการเช็กอิน'}
             </p>
           </div>
@@ -1095,10 +1063,10 @@ export default function PatientDashboard({
             <span className="text-lg">📱</span>
             <div>
               <h3 className="text-sm font-black text-slate-900">วิธีเพิ่มแอปลงหน้าจอมือถือ (Add to Home Screen)</h3>
-              <p className="text-[11px] text-slate-500 font-medium">บันทึกทางเข้าไว้ที่หน้าจอหลักบนมือถือ เปิดใช้งานง่าย ปลอดภัย 100%</p>
+              <p className="text-xs sm:text-[13px] text-slate-500 font-medium">บันทึกทางเข้าไว้ที่หน้าจอหลักบนมือถือ เปิดใช้งานง่าย ปลอดภัย 100%</p>
             </div>
           </div>
-          <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
+          <span className="text-[11px] sm:text-xs font-extrabold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
             ไม่ต้องลงโปรแกรม
           </span>
         </div>
@@ -1106,22 +1074,22 @@ export default function PatientDashboard({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {/* Android Box */}
           <div className="p-3 bg-white/95 rounded-xl border border-emerald-200/80 shadow-2xs space-y-1">
-            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-900">
+            <div className="flex items-center gap-1.5 text-sm font-black text-emerald-900">
               <span className="text-base">🤖</span>
               <span>สำหรับ Android (Chrome)</span>
             </div>
-            <p className="text-[11px] text-slate-700 font-semibold pl-6">
-              แตะจุด 3 จุดมุมขวาบน <span className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-300 font-mono text-xs">⋮</span> ➔ เลือก <strong className="text-emerald-800">"เพิ่มลงในหน้าจอหลัก"</strong>
+            <p className="text-xs sm:text-[13px] text-slate-700 font-semibold pl-6">
+              แตะจุด 3 จุดมุมขวาบน <span className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-300 font-mono text-sm">⋮</span> ➔ เลือก <strong className="text-emerald-800">"เพิ่มลงในหน้าจอหลัก"</strong>
             </p>
           </div>
 
           {/* iOS Box */}
           <div className="p-3 bg-white/95 rounded-xl border border-blue-200/80 shadow-2xs space-y-1">
-            <div className="flex items-center gap-1.5 text-xs font-black text-blue-900">
+            <div className="flex items-center gap-1.5 text-sm font-black text-blue-900">
               <span className="text-base">🍎</span>
               <span>สำหรับ iPhone / iPad (Safari)</span>
             </div>
-            <p className="text-[11px] text-slate-700 font-semibold pl-6">
+            <p className="text-xs sm:text-[13px] text-slate-700 font-semibold pl-6">
               แตะปุ่มแชร์ด้านล่าง <Share2 className="w-3.5 h-3.5 inline text-blue-600 mx-0.5" /> ➔ เลือก <strong className="text-blue-800">"เพิ่มไปยังหน้าจอโฮม"</strong>
             </p>
           </div>
@@ -1139,7 +1107,7 @@ export default function PatientDashboard({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-xl rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl space-y-5 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
+              className="bg-white w-full max-w-xl rounded-3xl p-4 sm:p-5 sm:p-6 md:p-8 shadow-2xl space-y-5 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -1148,7 +1116,7 @@ export default function PatientDashboard({
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-slate-900">ออกกำลังกายเพิ่มความสูง & บุคลิกภาพ</h3>
-                    <p className="text-xs text-slate-500">รายการท่าออกกำลังกายเฉพาะที่คลินิกติ๊กเลือกให้</p>
+                    <p className="text-sm text-slate-500">รายการท่าออกกำลังกายเฉพาะที่คลินิกติ๊กเลือกให้</p>
                   </div>
                 </div>
                 <button 
@@ -1174,18 +1142,18 @@ export default function PatientDashboard({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                          <span className="text-[11px] sm:text-xs font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
                             {ex.category}
                           </span>
                           <h4 className="text-sm font-black text-slate-900 mt-1">{ex.title}</h4>
-                          <p className="text-xs text-slate-500 mt-0.5">{ex.subtitle}</p>
+                          <p className="text-sm text-slate-500 mt-0.5">{ex.subtitle}</p>
                         </div>
                         <button type="button"
                           onClick={() => {
                             const updated = { ...completedExercisesMap, [ex.id]: !isDone };
                             setCompletedExercisesMap(updated);
                           }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
+                          className={`px-3 py-1.5 rounded-xl text-sm font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
                             isDone ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                           }`}
                         >
@@ -1197,7 +1165,7 @@ export default function PatientDashboard({
                       <div className="flex gap-2 pt-1">
                         <button type="button"
                           onClick={() => setSelectedExerciseGuide(ex)}
-                          className="text-xs text-purple-700 hover:underline font-bold flex items-center gap-1"
+                          className="text-sm text-purple-700 hover:underline font-bold flex items-center gap-1"
                         >
                           <BookOpen className="w-3.5 h-3.5" />
                           <span>ดูขั้นตอนวิธีฝึก & คลิป</span>
@@ -1211,13 +1179,13 @@ export default function PatientDashboard({
               <div className="flex gap-3 pt-3 border-t border-slate-100 shrink-0">
                 <button type="button"
                   onClick={() => setShowExerciseModal(false)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer min-h-[44px]"
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer min-h-[44px]"
                 >
                   ปิด / ยกเลิก
                 </button>
                 <button type="button"
                   onClick={handleSaveExercises}
-                  className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                  className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
                 >
                   <Check className="w-4 h-4" />
                   <span>บันทึกข้อมูลการออกกำลังกาย</span>
@@ -1239,7 +1207,7 @@ export default function PatientDashboard({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-xl rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl space-y-5 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
+              className="bg-white w-full max-w-xl rounded-3xl p-4 sm:p-5 sm:p-6 md:p-8 shadow-2xl space-y-5 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -1248,7 +1216,7 @@ export default function PatientDashboard({
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-slate-900">แบบฝึกกล้ามเนื้อปาก OMT ประจำวัน</h3>
-                    <p className="text-xs text-slate-500">รายชื่อท่า OMT ภาษาไทยเต็มเฉพาะที่คลินิกจัดสรรให้</p>
+                    <p className="text-sm text-slate-500">รายชื่อท่า OMT ภาษาไทยเต็มเฉพาะที่คลินิกจัดสรรให้</p>
                   </div>
                 </div>
                 <button 
@@ -1279,15 +1247,15 @@ export default function PatientDashboard({
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="space-y-1">
-                            <span className="text-[10px] font-extrabold text-purple-800 bg-purple-100 px-2 py-0.5 rounded">
+                            <span className="text-[11px] sm:text-xs font-extrabold text-purple-800 bg-purple-100 px-2 py-0.5 rounded">
                               OMT Exercise
                             </span>
                             <p className="text-sm font-bold text-slate-900 mt-1">{fullTitle}</p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-sm text-slate-500">
                               เป้าหมาย: {assign.reps || 10} ครั้ง / {assign.durationMinutes || 5} นาที
                             </p>
                             {assign.instruction && (
-                              <p className="text-xs text-purple-700 italic">
+                              <p className="text-sm text-purple-700 italic">
                                 💬 คำแนะนำ: "{assign.instruction}"
                               </p>
                             )}
@@ -1297,7 +1265,7 @@ export default function PatientDashboard({
                             onClick={() => {
                               handleCompleteOmtAssignment(assign.id, fullTitle);
                             }}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                            className={`px-3 py-1.5 rounded-xl text-sm font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
                               isDone ? 'bg-emerald-600 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white'
                             }`}
                           >
@@ -1319,7 +1287,7 @@ export default function PatientDashboard({
                                 category: 'OMT'
                               });
                             }}
-                            className="text-xs text-purple-700 hover:text-purple-900 font-black flex items-center gap-1 cursor-pointer"
+                            className="text-sm text-purple-700 hover:text-purple-900 font-black flex items-center gap-1 cursor-pointer"
                           >
                             <BookOpen className="w-3.5 h-3.5" />
                             <span>▶ เข้าฝึกด้วย Interactive Player & ดูคลิป</span>
@@ -1336,7 +1304,7 @@ export default function PatientDashboard({
                   </div>
                   <div className="space-y-1">
                     <h4 className="text-sm font-black text-slate-800">คุณหมอยังไม่ได้มอบหมายแบบฝึกหัดประจำสัปดาห์นี้</h4>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    <p className="text-sm text-slate-500 max-w-sm mx-auto">
                       ระบบจะแสดงรายการแบบฝึกหัดเมื่อคุณหมอประจำตัวจัดสรรรายการการบ้านรายบุคคลให้ครับ/ค่ะ
                     </p>
                   </div>
@@ -1346,13 +1314,13 @@ export default function PatientDashboard({
               <div className="flex gap-3 pt-3 border-t border-slate-100 shrink-0">
                 <button type="button"
                   onClick={() => setShowOmtModal(false)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer min-h-[44px]"
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer min-h-[44px]"
                 >
                   ปิด / ยกเลิก
                 </button>
                 <button type="button"
                   onClick={() => handleSaveOmtHomework()}
-                  className="flex-1 py-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                  className="flex-1 py-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
                 >
                   <Check className="w-4 h-4" />
                   <span>บันทึกข้อมูล OMT</span>
@@ -1376,7 +1344,7 @@ export default function PatientDashboard({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-xl rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
+              className="bg-white w-full max-w-xl rounded-3xl p-4 sm:p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
@@ -1388,7 +1356,7 @@ export default function PatientDashboard({
                     <h3 className="text-lg font-black text-slate-900">
                       Growth Lab Sleep Quality Score
                     </h3>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm text-slate-500">
                       แบบบันทึกคุณภาพการนอนและการสวมใส่อุปกรณ์ EF ประจำวัน
                     </p>
                   </div>
@@ -1406,63 +1374,63 @@ export default function PatientDashboard({
 
               {/* Section 1: Sleep Schedule */}
               <div className="bg-purple-50/50 p-4 rounded-2xl border border-purple-100 space-y-3">
-                <h4 className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                <h4 className="text-sm font-black text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-purple-600" />
                   <span>1. บันทึกเวลานอน (Sleep Schedule)</span>
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">เข้านอน (เวลา)</label>
+                    <label className="text-xs sm:text-[13px] font-bold text-slate-700 block mb-1">เข้านอน (เวลา)</label>
                     <input 
                       type="time" 
                       value={efBedtime}
                       onChange={(e) => setEfBedtime(e.target.value)}
-                      className="w-full p-2.5 bg-white border border-purple-200 rounded-xl text-xs font-bold text-slate-800 text-center"
+                      className="w-full p-2.5 bg-white border border-purple-200 rounded-xl text-sm font-bold text-slate-800 text-center"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">หลับจริง (เวลา)</label>
+                    <label className="text-xs sm:text-[13px] font-bold text-slate-700 block mb-1">หลับจริง (เวลา)</label>
                     <input 
                       type="time" 
                       value={efActualSleepTime}
                       onChange={(e) => setEfActualSleepTime(e.target.value)}
-                      className="w-full p-2.5 bg-white border border-purple-200 rounded-xl text-xs font-bold text-slate-800 text-center"
+                      className="w-full p-2.5 bg-white border border-purple-200 rounded-xl text-sm font-bold text-slate-800 text-center"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 block mb-1">ตื่นนอน (เวลา)</label>
+                    <label className="text-xs sm:text-[13px] font-bold text-slate-700 block mb-1">ตื่นนอน (เวลา)</label>
                     <input 
                       type="time" 
                       value={efWakeTime}
                       onChange={(e) => setEfWakeTime(e.target.value)}
-                      className="w-full p-2.5 bg-white border border-purple-200 rounded-xl text-xs font-bold text-slate-800 text-center"
+                      className="w-full p-2.5 bg-white border border-purple-200 rounded-xl text-sm font-bold text-slate-800 text-center"
                     />
                   </div>
                 </div>
 
                 {/* Auto Calculated Sleep Duration Banner */}
                 <div className="p-3 bg-white rounded-xl border border-purple-200 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700">⏱️ ชั่วโมงนอนสุทธิ (คำนวณอัตโนมัติ):</span>
+                  <span className="text-sm font-bold text-slate-700">⏱️ ชั่วโมงนอนสุทธิ (คำนวณอัตโนมัติ):</span>
                   <span className="text-sm font-black text-purple-700 bg-purple-100 px-3 py-1 rounded-lg">
                     {calculateNetSleepHours(efActualSleepTime, efWakeTime)} ชั่วโมง
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-500 italic">
+                <p className="text-[11px] sm:text-xs text-slate-500 italic">
                   คำแนะนำ AASM: เด็ก 6-12 ปี ควรนอน 9-12 ชม./วัน, อายุ 13-18 ปี ควรนอน 8-10 ชม./วัน
                 </p>
               </div>
 
               {/* Section 2: Night Symptoms & Morning Condition */}
               <div className="space-y-3">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
                   2. อาการระหว่างคืน & ความสดชื่นตอนเช้า
                 </h4>
 
                 {/* Awakenings */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-slate-800">ตื่นกลางดึก (จำนวนครั้ง)</p>
-                    <p className="text-[10px] text-slate-500">สะดุ้งตื่น ตื่นมาเข้าห้องน้ำ หรือตื่นร้องงอแง</p>
+                    <p className="text-sm font-bold text-slate-800">ตื่นกลางดึก (จำนวนครั้ง)</p>
+                    <p className="text-[11px] sm:text-xs text-slate-500">สะดุ้งตื่น ตื่นมาเข้าห้องน้ำ หรือตื่นร้องงอแง</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
@@ -1486,10 +1454,10 @@ export default function PatientDashboard({
                 {/* Snoring / Mouth Breathing Score */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <div>
-                    <p className="text-xs font-bold text-slate-800">อาการกรน / อ้าปากหายใจ</p>
-                    <p className="text-[10px] text-slate-500">สังเกตจากเสียงกรน หายใจติดขัด หรือนอนอ้าปาก</p>
+                    <p className="text-sm font-bold text-slate-800">อาการกรน / อ้าปากหายใจ</p>
+                    <p className="text-[11px] sm:text-xs text-slate-500">สังเกตจากเสียงกรน หายใจติดขัด หรือนอนอ้าปาก</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {[
                       { score: 0, label: '0 = ไม่เป็น' },
                       { score: 1, label: '1 = เป็นบางครั้ง' },
@@ -1499,7 +1467,7 @@ export default function PatientDashboard({
                         key={opt.score}
                         type="button"
                         onClick={() => setEfSnoringMouthBreathingScore(opt.score)}
-                        className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                        className={`py-2 px-2 rounded-xl text-sm font-bold transition-all border cursor-pointer ${
                           efSnoringMouthBreathingScore === opt.score
                             ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                             : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -1514,10 +1482,10 @@ export default function PatientDashboard({
                 {/* Morning Condition */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <div>
-                    <p className="text-xs font-bold text-slate-800">ความสดชื่นตอนเช้า</p>
-                    <p className="text-[10px] text-slate-500">สภาวะอารมณ์และความตื่นตัวหลังตื่นนอน</p>
+                    <p className="text-sm font-bold text-slate-800">ความสดชื่นตอนเช้า</p>
+                    <p className="text-[11px] sm:text-xs text-slate-500">สภาวะอารมณ์และความตื่นตัวหลังตื่นนอน</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {[
                       { label: '🙂 สดชื่นดี', val: '🙂 สดชื่นดี' },
                       { label: '😐 ปานกลาง', val: '😐 ปานกลาง' },
@@ -1527,7 +1495,7 @@ export default function PatientDashboard({
                         key={opt.val}
                         type="button"
                         onClick={() => setEfMorningCondition(opt.val)}
-                        className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                        className={`py-2 px-2 rounded-xl text-sm font-bold transition-all border cursor-pointer ${
                           efMorningCondition === opt.val
                             ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                             : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -1543,13 +1511,13 @@ export default function PatientDashboard({
               {/* Section 3: EF Appliance Wear Log */}
               <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black text-indigo-900 uppercase tracking-wider">
+                  <h4 className="text-sm font-black text-indigo-900 uppercase tracking-wider">
                     3. การใส่อุปกรณ์ EF (EF Appliance Wear)
                   </h4>
                   <button
                     type="button"
                     onClick={() => setEfWorn(!efWorn)}
-                    className={`px-3 py-1 rounded-full text-xs font-extrabold cursor-pointer transition-all ${
+                    className={`px-3 py-1 rounded-full text-sm font-extrabold cursor-pointer transition-all ${
                       efWorn ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'
                     }`}
                   >
@@ -1560,7 +1528,7 @@ export default function PatientDashboard({
                 {efWorn && (
                   <div className="space-y-3 pt-1">
                     <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-indigo-200">
-                      <span className="text-xs font-bold text-slate-700">ชั่วโมงที่ใส่ EF (ชม.):</span>
+                      <span className="text-sm font-bold text-slate-700">ชั่วโมงที่ใส่ EF (ชม.):</span>
                       <input 
                         type="number"
                         step="0.5"
@@ -1568,7 +1536,7 @@ export default function PatientDashboard({
                         max="24"
                         value={efDurationHours}
                         onChange={(e) => setEfDurationHours(Number(e.target.value))}
-                        className="w-20 p-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-center font-black text-indigo-900 text-xs"
+                        className="w-20 p-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-center font-black text-indigo-900 text-sm"
                       />
                     </div>
 
@@ -1580,7 +1548,7 @@ export default function PatientDashboard({
                           onChange={(e) => setEfRemovedDuringNight(e.target.checked)}
                           className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
                         />
-                        <span className="text-xs font-bold text-slate-800">มีการถอดอุปกรณ์ หรือหลุดกลางดึก</span>
+                        <span className="text-sm font-bold text-slate-800">มีการถอดอุปกรณ์ หรือหลุดกลางดึก</span>
                       </label>
                       {efRemovedDuringNight && (
                         <input 
@@ -1588,7 +1556,7 @@ export default function PatientDashboard({
                           placeholder="ระบุเหตุผล เช่น หลุดเอง, เจ็บฟัน, อึดอัดแน่น"
                           value={efRemovalReason}
                           onChange={(e) => setEfRemovalReason(e.target.value)}
-                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800"
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800"
                         />
                       )}
                     </div>
@@ -1598,10 +1566,10 @@ export default function PatientDashboard({
 
               {/* Section 4: Sleep Quality Score 1-5 */}
               <div className="space-y-2">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
                   4. คะแนนคุณภาพการนอน (Sleep Quality Score 1-5)
                 </h4>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-xs sm:text-[13px] text-slate-500">
                   เลือกระดับคะแนนประเมินโดยรวมประจำวันนี้ตามเกณฑ์มาตรฐาน Growth Lab
                 </p>
 
@@ -1624,10 +1592,10 @@ export default function PatientDashboard({
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className={`px-2 py-0.5 rounded-md text-xs font-black ${item.badge}`}>
+                        <span className={`px-2 py-0.5 rounded-md text-sm font-black ${item.badge}`}>
                           {item.label}
                         </span>
-                        <span className="text-xs font-medium">{item.desc}</span>
+                        <span className="text-sm font-medium">{item.desc}</span>
                       </div>
                       <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${
                         efSleepQualityScore === item.score ? 'border-purple-600 bg-purple-600 text-white' : 'border-slate-300'
@@ -1641,13 +1609,13 @@ export default function PatientDashboard({
 
               {/* Section 5: Notes */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-600">ข้อความบันทึกเพิ่มเติม (ถ้ามี):</label>
+                <label className="text-xs sm:text-[13px] font-bold text-slate-600">ข้อความบันทึกเพิ่มเติม (ถ้ามี):</label>
                 <input 
                   type="text" 
                   placeholder="เช่น วันนี้น้องใส่ง่าย ไม่บ่นเจ็บ นอนหลับยาว" 
                   value={efNotes}
                   onChange={(e) => setEfNotes(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-purple-600"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-purple-600"
                 />
               </div>
 
@@ -1655,14 +1623,14 @@ export default function PatientDashboard({
               <div className="flex gap-3 pt-2">
                 <button type="button"
                   onClick={() => setShowEfModal(false)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button type="button"
                   onClick={handleSaveEfAppliance}
                   disabled={isSavingEf}
-                  className={`flex-1 py-3 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  className={`flex-1 py-3 font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
                     isSavingEf ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'
                   }`}
                 >
@@ -1686,7 +1654,7 @@ export default function PatientDashboard({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-lg rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
+              className="bg-white w-full max-w-lg rounded-3xl p-4 sm:p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -1695,7 +1663,7 @@ export default function PatientDashboard({
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-slate-900">บันทึกโภชนาการประจำวัน (GNS)</h3>
-                    <p className="text-xs text-slate-500">ประเมินอาหารและโภชนาการ 5 หมวดหลักวันนี้</p>
+                    <p className="text-sm text-slate-500">ประเมินอาหารและโภชนาการ 5 หมวดหลักวันนี้</p>
                   </div>
                 </div>
                 <button 
@@ -1722,9 +1690,9 @@ export default function PatientDashboard({
                     <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${gnsProtein ? 'bg-emerald-600 text-white' : 'border border-slate-300'}`}>
                       {gnsProtein && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                    <span className="text-xs">1. ได้รับโปรตีนคุณภาพดี (ไข่, ปลา, ไก่, เนื้อสัตว์)</span>
+                    <span className="text-sm">1. ได้รับโปรตีนคุณภาพดี (ไข่, ปลา, ไก่, เนื้อสัตว์)</span>
                   </div>
-                  <span className="text-[11px] font-black shrink-0">{gnsProtein ? '+20' : '0'}</span>
+                  <span className="text-xs sm:text-[13px] font-black shrink-0">{gnsProtein ? '+20' : '0'}</span>
                 </button>
 
                 {/* 2. Calcium */}
@@ -1739,9 +1707,9 @@ export default function PatientDashboard({
                     <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${gnsCalcium ? 'bg-emerald-600 text-white' : 'border border-slate-300'}`}>
                       {gnsCalcium && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                    <span className="text-xs">2. แคลเซียม & วิตามินดี (นมสด 2-3 แก้ว หรือโยเกิร์ต)</span>
+                    <span className="text-sm">2. แคลเซียม & วิตามินดี (นมสด 2-3 แก้ว หรือโยเกิร์ต)</span>
                   </div>
-                  <span className="text-[11px] font-black shrink-0">{gnsCalcium ? '+20' : '0'}</span>
+                  <span className="text-xs sm:text-[13px] font-black shrink-0">{gnsCalcium ? '+20' : '0'}</span>
                 </button>
 
                 {/* 3. Veg & Fruit */}
@@ -1756,9 +1724,9 @@ export default function PatientDashboard({
                     <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${gnsVegFruit ? 'bg-emerald-600 text-white' : 'border border-slate-300'}`}>
                       {gnsVegFruit && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                    <span className="text-xs">3. ผักและผลไม้หลากสี มีใยอาหาร</span>
+                    <span className="text-sm">3. ผักและผลไม้หลากสี มีใยอาหาร</span>
                   </div>
-                  <span className="text-[11px] font-black shrink-0">{gnsVegFruit ? '+20' : '0'}</span>
+                  <span className="text-xs sm:text-[13px] font-black shrink-0">{gnsVegFruit ? '+20' : '0'}</span>
                 </button>
 
                 {/* 4. Food Quality */}
@@ -1773,9 +1741,9 @@ export default function PatientDashboard({
                     <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${gnsLowSugar ? 'bg-emerald-600 text-white' : 'border border-slate-300'}`}>
                       {gnsLowSugar && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                    <span className="text-xs">4. ลดหวาน งดน้ำอัดลม ขนมกรุบกรอบ และของทอด</span>
+                    <span className="text-sm">4. ลดหวาน งดน้ำอัดลม ขนมกรุบกรอบ และของทอด</span>
                   </div>
-                  <span className="text-[11px] font-black shrink-0">{gnsLowSugar ? '+20' : '0'}</span>
+                  <span className="text-xs sm:text-[13px] font-black shrink-0">{gnsLowSugar ? '+20' : '0'}</span>
                 </button>
 
                 {/* 5. Water */}
@@ -1790,14 +1758,14 @@ export default function PatientDashboard({
                     <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${gnsWater ? 'bg-emerald-600 text-white' : 'border border-slate-300'}`}>
                       {gnsWater && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                    <span className="text-xs">5. ดื่มน้ำเปล่าสะอาดเพียงพอ (6-8 แก้ว)</span>
+                    <span className="text-sm">5. ดื่มน้ำเปล่าสะอาดเพียงพอ (6-8 แก้ว)</span>
                   </div>
-                  <span className="text-[11px] font-black shrink-0">{gnsWater ? '+20' : '0'}</span>
+                  <span className="text-xs sm:text-[13px] font-black shrink-0">{gnsWater ? '+20' : '0'}</span>
                 </button>
 
                 {/* Calculated preview */}
                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-800">คะแนนประเมิน GNS วันนี้:</span>
+                  <span className="text-sm font-bold text-emerald-800">คะแนนประเมิน GNS วันนี้:</span>
                   <span className="text-xl font-black text-emerald-700">
                     {((gnsProtein ? 1 : 0) + (gnsCalcium ? 1 : 0) + (gnsVegFruit ? 1 : 0) + (gnsLowSugar ? 1 : 0) + (gnsWater ? 1 : 0)) * 20} / 100
                   </span>
@@ -1807,14 +1775,14 @@ export default function PatientDashboard({
               <div className="flex gap-3 pt-2 shrink-0 border-t border-slate-100">
                 <button type="button"
                   onClick={() => setShowNutritionModal(false)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer min-h-[44px]"
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer min-h-[44px]"
                 >
                   ยกเลิก
                 </button>
                 <button type="button"
                   onClick={handleSaveNutrition}
                   disabled={isSavingNutrition}
-                  className={`flex-1 py-3 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${isSavingNutrition ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
+                  className={`flex-1 py-3 font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${isSavingNutrition ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
                 >
                   <Check className="w-4 h-4" />
                   <span>{isSavingNutrition ? 'กำลังบันทึก...' : 'บันทึกคะแนน'}</span>
@@ -1836,7 +1804,7 @@ export default function PatientDashboard({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-md rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
+              className="bg-white w-full max-w-md rounded-3xl p-4 sm:p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -1845,7 +1813,7 @@ export default function PatientDashboard({
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-slate-900">อัปเดตข้อมูลการเติบโตประจำสัปดาห์</h3>
-                    <p className="text-xs text-slate-500">บันทึกส่วนสูงและน้ำหนักล่าสุด</p>
+                    <p className="text-sm text-slate-500">บันทึกส่วนสูงและน้ำหนักล่าสุด</p>
                   </div>
                 </div>
                 <button 
@@ -1861,7 +1829,7 @@ export default function PatientDashboard({
 
               <div className="space-y-4 flex-1">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
                     <Ruler className="w-4 h-4 text-purple-600" />
                     <span>ส่วนสูงปัจจุบัน (เซนติเมตร / cm):</span>
                   </label>
@@ -1879,14 +1847,14 @@ export default function PatientDashboard({
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-purple-600"
                   />
                   {patient.height && (
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-xs sm:text-[13px] text-slate-400">
                       เดิม: {patient.height} ซม. {(parseFloat(growthHeight) || 0) > patient.height ? `(เพิ่มขึ้น +${((parseFloat(growthHeight) || 0) - patient.height).toFixed(1)} ซม. 🎉)` : ''}
                     </p>
                   )}
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
                     <Scale className="w-4 h-4 text-purple-600" />
                     <span>น้ำหนักปัจจุบัน (กิโลกรัม / kg):</span>
                   </label>
@@ -1904,7 +1872,7 @@ export default function PatientDashboard({
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-purple-600"
                   />
                   {patient.weight && (
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-xs sm:text-[13px] text-slate-400">
                       เดิม: {patient.weight} กก.
                     </p>
                   )}
@@ -1912,7 +1880,7 @@ export default function PatientDashboard({
 
                 {/* BMI Preview */}
                 <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 flex items-center justify-between">
-                  <span className="text-xs font-bold text-purple-900">ดัชนีมวลกายคำนวณ (BMI):</span>
+                  <span className="text-sm font-bold text-purple-900">ดัชนีมวลกายคำนวณ (BMI):</span>
                   <span className="text-base font-black text-purple-700">
                     {calculateBMI(parseFloat(growthWeight) || 0, parseFloat(growthHeight) || 0)} kg/m²
                   </span>
@@ -1922,14 +1890,14 @@ export default function PatientDashboard({
               <div className="flex gap-3 pt-2 shrink-0 border-t border-slate-100">
                 <button type="button"
                   onClick={() => setShowGrowthModal(false)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer min-h-[44px]"
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer min-h-[44px]"
                 >
                   ยกเลิก
                 </button>
                 <button type="button"
                   onClick={handleSaveGrowth}
                   disabled={isSavingGrowth}
-                  className={`flex-1 py-3 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${isSavingGrowth ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                  className={`flex-1 py-3 font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${isSavingGrowth ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
                 >
                   <Check className="w-4 h-4" />
                   <span>{isSavingGrowth ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}</span>
@@ -1951,7 +1919,7 @@ export default function PatientDashboard({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-md rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
+              className="bg-white w-full max-w-md rounded-3xl p-4 sm:p-5 sm:p-6 md:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto custom-scrollbar my-auto flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -1960,7 +1928,7 @@ export default function PatientDashboard({
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-slate-900">เริ่มวันใหม่ เช็กอินกันก่อนน้าาา ✨</h3>
-                    <p className="text-xs text-slate-500">บันทึกกิจวัตรและการดูแลประจำวันนี้</p>
+                    <p className="text-sm text-slate-500">บันทึกกิจวัตรและการดูแลประจำวันนี้</p>
                   </div>
                 </div>
                 <button 
@@ -1986,14 +1954,14 @@ export default function PatientDashboard({
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
                       checkInEfWorn ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-500'
                     }`}>
                       1
                     </div>
                     <div>
-                      <p className="text-xs font-bold">สวมใส่อุปกรณ์ EF เข้านอนเมื่อคืน</p>
-                      <p className="text-[10px] text-slate-500">ช่วยปรับตำแหน่งขากรรไกรและการหายใจ</p>
+                      <p className="text-sm font-bold">สวมใส่อุปกรณ์ EF เข้านอนเมื่อคืน</p>
+                      <p className="text-[11px] sm:text-xs text-slate-500">ช่วยปรับตำแหน่งขากรรไกรและการหายใจ</p>
                     </div>
                   </div>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
@@ -2014,14 +1982,14 @@ export default function PatientDashboard({
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
                       checkInGoodSleep ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
                     }`}>
                       2
                     </div>
                     <div>
-                      <p className="text-xs font-bold">นอนหลับสนิท 8+ ชั่วโมง</p>
-                      <p className="text-[10px] text-slate-500">เข้านอนตรงเวลาและตื่นสดชื่น</p>
+                      <p className="text-sm font-bold">นอนหลับสนิท 8+ ชั่วโมง</p>
+                      <p className="text-[11px] sm:text-xs text-slate-500">เข้านอนตรงเวลาและตื่นสดชื่น</p>
                     </div>
                   </div>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
@@ -2042,14 +2010,14 @@ export default function PatientDashboard({
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
                       checkInNasalBreathe ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
                     }`}>
                       3
                     </div>
                     <div>
-                      <p className="text-xs font-bold">หายใจทางจมูก & ริมฝีปากปิดสนิท</p>
-                      <p className="text-[10px] text-slate-500">ไม่อ้าปากระหว่างทำกิจกรรม</p>
+                      <p className="text-sm font-bold">หายใจทางจมูก & ริมฝีปากปิดสนิท</p>
+                      <p className="text-[11px] sm:text-xs text-slate-500">ไม่อ้าปากระหว่างทำกิจกรรม</p>
                     </div>
                   </div>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
@@ -2070,14 +2038,14 @@ export default function PatientDashboard({
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm ${
                       checkInWater ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'
                     }`}>
                       4
                     </div>
                     <div>
-                      <p className="text-xs font-bold">ดื่มน้ำเปล่าสะอาดเพียงพอ</p>
-                      <p className="text-[10px] text-slate-500">ดื่มน้ำหลังตื่นนอนและตลอดวัน</p>
+                      <p className="text-sm font-bold">ดื่มน้ำเปล่าสะอาดเพียงพอ</p>
+                      <p className="text-[11px] sm:text-xs text-slate-500">ดื่มน้ำหลังตื่นนอนและตลอดวัน</p>
                     </div>
                   </div>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
@@ -2089,13 +2057,13 @@ export default function PatientDashboard({
 
                 {/* Optional Note */}
                 <div className="space-y-1 pt-1">
-                  <label className="text-[11px] font-bold text-slate-600">ข้อความบันทึกเพิ่มเติม (ถ้ามี):</label>
+                  <label className="text-xs sm:text-[13px] font-bold text-slate-600">ข้อความบันทึกเพิ่มเติม (ถ้ามี):</label>
                   <input 
                     type="text" 
                     placeholder="เช่น วันนี้น้องตื่นเช้า อารมณ์ดี ทานข้าวหมดจาน" 
                     value={checkInNotes}
                     onChange={(e) => setCheckInNotes(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-purple-600"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-purple-600"
                   />
                 </div>
               </div>
@@ -2103,14 +2071,14 @@ export default function PatientDashboard({
               <div className="flex gap-3 pt-2 shrink-0 border-t border-slate-100">
                 <button type="button"
                   onClick={() => setShowCheckInModal(false)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer min-h-[44px]"
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer min-h-[44px]"
                 >
                   ยกเลิก
                 </button>
                 <button type="button"
                   onClick={handleSaveCheckIn}
                   disabled={isSavingCheckIn}
-                  className={`flex-1 py-3 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${isSavingCheckIn ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                  className={`flex-1 py-3 font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${isSavingCheckIn ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
                 >
                   <Check className="w-4 h-4" />
                   <span>{isSavingCheckIn ? 'กำลังบันทึก...' : 'บันทึกการเช็กอิน'}</span>
@@ -2139,7 +2107,7 @@ export default function PatientDashboard({
                 </h3>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => handleDownloadMedia(activeEvidenceVideo.url, `growthlab_${activeEvidenceVideo.title}.mp4`)}
-                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 min-h-[36px]"
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 min-h-[36px]"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>ดาวน์โหลดคลิป</span>
@@ -2173,7 +2141,7 @@ export default function PatientDashboard({
       {/* Interactive Workout Player Modal */}
       <AnimatePresence>
         {selectedExerciseGuide && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-900/80 backdrop-blur-sm overflow-y-auto prevent-pull-refresh" style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 sm:p-5 bg-slate-900/80 backdrop-blur-sm overflow-y-auto prevent-pull-refresh" style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}>
             <motion.div 
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.95 }}
@@ -2185,7 +2153,7 @@ export default function PatientDashboard({
               <button
                 type="button"
                 onClick={() => setSelectedExerciseGuide(null)}
-                className="absolute top-3 sm:top-5 right-3 sm:right-5 z-40 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-colors shadow-xs cursor-pointer flex items-center gap-1.5 text-xs font-bold border border-slate-200 min-h-[44px] touch-manipulation"
+                className="absolute top-3 sm:top-4 sm:p-5 right-3 sm:right-5 z-40 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-colors shadow-xs cursor-pointer flex items-center gap-1.5 text-sm font-bold border border-slate-200 min-h-[44px] touch-manipulation"
                 aria-label="ปิดหน้าต่างแบบฝึกหัด"
                 title="ปิดหน้าต่างแบบฝึกหัด"
               >
