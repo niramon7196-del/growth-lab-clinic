@@ -340,47 +340,59 @@ export default function ParticipantCheckInPortal({
     } catch {}
   };
 
+  const [isCheckingIn, setIsCheckingIn] = useState<boolean>(false);
+
   // One-touch Check-in handler
-  const handlePerformCheckIn = () => {
-    if (!patient || !patient.id) return;
-    onCheckIn(patient.id, 'QR');
+  const handlePerformCheckIn = async () => {
+    if (!patient || !patient.id || isCheckingIn) return;
+    setIsCheckingIn(true);
     
-    // Cloud Sync to Google Sheets
-    const nowIso = new Date().toISOString();
-    const newRecord: CheckInRecord = {
-      id: `chk_${Date.now()}`,
-      patientId: patient.id,
-      date: todayStr,
-      timestamp: nowIso,
-      source: 'QR',
-      method: 'QR_TOKEN'
-    };
-    syncRealtimeCheckIn(patient, newRecord).catch(err => 
-      console.warn('[ParticipantCheckInPortal] syncRealtimeCheckIn warning:', err)
-    );
+    try {
+      onCheckIn(patient.id, 'QR');
+      
+      // Cloud Sync to Google Sheets
+      const nowIso = new Date().toISOString();
+      const nowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+      const newRecord: CheckInRecord = {
+        id: `chk_${Date.now()}`,
+        patientId: patient.id,
+        date: todayStr,
+        timestamp: nowIso,
+        source: 'QR',
+        method: 'QR_TOKEN'
+      };
+      
+      syncRealtimeCheckIn(patient, newRecord).catch(err => 
+        console.warn('[ParticipantCheckInPortal] syncRealtimeCheckIn warning:', err)
+      );
 
-    const activeHn = (patient.hn || patient.id || '').trim();
-    const activeName = ((patient as any).name || `${patient.firstName || ''} ${patient.lastName || ''}`).trim();
+      const activeHn = (patient.hn || patient.id || '').trim();
+      const activeName = ((patient as any).name || `${patient.firstName || ''} ${patient.lastName || ''}`).trim();
 
-    cloudApi.logDaily({
-      hn: activeHn,
-      name: activeName,
-      patientName: activeName,
-      patientId: patient.id,
-      date: todayStr,
-      time: nowTime,
-      timestamp: nowIso,
-      action: 'Daily Check-in',
-      actionName: 'เช็คอินประจำวัน (Daily Check-in)',
-      score: 'สำเร็จ',
-      status: 'completed',
-      source: 'QR',
-      sheetName: 'Daily_Logs'
-    }).catch(err => console.warn('[ParticipantCheckInPortal] cloudApi.logDaily error:', err));
+      await cloudApi.logDaily({
+        hn: activeHn,
+        name: activeName,
+        patientName: activeName,
+        patientId: patient.id,
+        date: todayStr,
+        time: nowTime,
+        timestamp: nowIso,
+        action: 'Daily Check-in',
+        actionName: 'เช็คอินประจำวัน (Daily Check-in)',
+        score: 'สำเร็จ',
+        status: 'completed',
+        source: 'QR',
+        sheetName: 'Daily_Logs'
+      });
 
-    setSaveSuccessToast('✓ เช็กอินประจำวันสำเร็จเรียบร้อย');
-    playSuccessChime();
-    setTimeout(() => setSaveSuccessToast(null), 3000);
+      setSaveSuccessToast('✓ เช็กอินประจำวันสำเร็จเรียบร้อย');
+      playSuccessChime();
+      setTimeout(() => setSaveSuccessToast(null), 3000);
+    } catch (error) {
+      console.warn('[ParticipantCheckInPortal] check-in error:', error);
+    } finally {
+      setIsCheckingIn(false);
+    }
   };
 
   // Save All Progress and Homework to Cloud (Google Sheets)
@@ -762,10 +774,15 @@ export default function ParticipantCheckInPortal({
               <button
                 type="button"
                 onClick={handlePerformCheckIn}
-                className="px-4 py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:opacity-95 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-95 flex items-center gap-1.5"
+                disabled={isCheckingIn}
+                className={`px-4 py-2.5 bg-gradient-to-r ${isCheckingIn ? 'from-purple-400 to-indigo-400 cursor-not-allowed' : 'from-purple-700 to-indigo-700 hover:opacity-95 cursor-pointer active:scale-95'} text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5`}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>กดเช็กอิน</span>
+                {isCheckingIn ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                <span>{isCheckingIn ? 'กำลังบันทึก...' : 'กดเช็กอิน'}</span>
               </button>
             )}
           </div>

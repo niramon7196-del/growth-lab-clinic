@@ -637,11 +637,15 @@ export async function syncHomeworkToGoogleSheets(
         hn: payload.hn || payload.patientId || '',
         patientId: payload.patientId || payload.hn || '',
         exerciseId: (payload.completedExercises && payload.completedExercises[0]) || 'omt_exercise',
-        duration: 5,
-        reps: 10,
+        durationSec: payload.durationSec || 300,
+        reps: payload.reps || 10,
         score: payload.exerciseScore || payload.omtScore || 100,
-        satisfaction: 5,
-        payload
+        satisfaction: payload.satisfaction || 5,
+        status: payload.status || 'completed',
+        patientName: payload.patientName || payload.name || '',
+        exerciseTitle: payload.exerciseTitle || 'ส่งการบ้านสรุปผลประจำวัน (SAVE_DAILY_SUMMARY)',
+        payload,
+        ...payload
       }),
       mode: 'no-cors'
     });
@@ -682,8 +686,15 @@ export async function syncNutritionToGoogleSheets(
       date: payload.date || new Date().toISOString().split('T')[0],
       score: payload.score || '100/100',
       status: payload.status || 'completed',
+      patientName: payload.patientName || payload.name || '',
+      exerciseId: payload.exerciseId || 'nutrition_gns',
+      exerciseTitle: payload.exerciseTitle || 'บันทึกโภชนาการ GNS',
+      durationSec: payload.durationSec || 60,
+      reps: payload.reps || 1,
+      satisfaction: payload.satisfaction || 5,
       itemsChecked: payload.itemsChecked || [],
-      payload
+      payload,
+      ...payload
     };
 
     const response = await fetch(targetUrl, {
@@ -732,10 +743,16 @@ export async function syncSleepEfToGoogleSheets(
       date: payload.date || new Date().toISOString().split('T')[0],
       score: payload.score || 'คะแนนการนอน 4/5, ใส่ EF 8 ชม.',
       status: payload.status || 'completed',
+      patientName: payload.patientName || payload.name || '',
+      exerciseId: payload.exerciseId || 'sleep_ef',
+      exerciseTitle: payload.exerciseTitle || 'บันทึกข้อมูลการนอน & EF',
+      durationSec: payload.durationSec || 60,
+      reps: payload.reps || 1,
+      satisfaction: payload.satisfaction || 5,
       sleepHours: payload.sleepHours || 8,
       efHours: payload.efHours || 8,
       rating: payload.rating || 5,
-      payload
+      ...payload
     };
 
     const response = await fetch(targetUrl, {
@@ -783,7 +800,14 @@ export async function syncDailyCheckInToGoogleSheets(
       score: payload.score || 'สำเร็จ',
       status: payload.status || 'completed',
       timestamp: new Date().toISOString(),
-      payload
+      patientName: payload.patientName || payload.name || '',
+      exerciseId: payload.exerciseId || payload.action || 'daily_checkin',
+      exerciseTitle: payload.exerciseTitle || payload.actionName || 'เช็คอินประจำวัน (Daily Check-in)',
+      durationSec: payload.durationSec || 0,
+      reps: payload.reps || 1,
+      satisfaction: payload.satisfaction || 5,
+      payload,
+      ...payload
     };
 
     const response = await fetch(targetUrl, {
@@ -836,7 +860,14 @@ export async function syncCleanDailySummaryToGoogleSheets(
       date: summaryData.date,
       score: `${summaryData.complianceScore}% (Streak: ${summaryData.streakDays} วัน)`,
       status: summaryData.checkInStatus,
-      payload: summaryData
+      patientName: summaryData.patientName || summaryData.name || '',
+      exerciseId: 'daily_summary',
+      exerciseTitle: 'Daily Summary Report',
+      durationSec: 0,
+      reps: summaryData.completedExercises || 0,
+      satisfaction: summaryData.sleepRating || 5,
+      payload: summaryData,
+      ...summaryData
     };
 
     const response = await fetch(targetUrl, {

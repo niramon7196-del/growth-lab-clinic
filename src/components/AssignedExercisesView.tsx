@@ -459,51 +459,10 @@ export default function AssignedExercisesView({
         )}
       </div>
 
-      {/* 4-Stage Navigation Selector Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
-        {[
-          { id: 'gns', label: '🥗 [1] โภชนาการ (GNS)', color: 'emerald' },
-          { id: 'sleep', label: '🌙 [2] การนอน & อุปกรณ์ EF', color: 'indigo' },
-          { id: 'exercise', label: '🏃 [3] ออกกำลังกายเพิ่มความสูง', color: 'amber' },
-          { id: 'omt', label: '👄 [4] แบบฝึกกล้ามเนื้อปาก OMT', color: 'purple' },
-        ].map((tab) => {
-          const isActive = selectedStageTab === tab.id;
-          return (
-            <button
-              type="button"
-              key={tab.id}
-              onClick={() => {
-                handleStageTabChange(tab.id as any);
-                const filtered = assignedItems.filter(item => {
-                  if (tab.id === 'gns') return item.exercise.category === 'nutrition';
-                  if (tab.id === 'sleep') return item.exercise.category === 'sleep' || (item.exercise.category as string) === 'appliance';
-                  if (tab.id === 'exercise') return item.exercise.category === 'posture' || item.exercise.category === 'movement' || item.exercise.category === 'jump' || item.exercise.category === 'strength';
-                  if ((tab.id as string) === 'omt') return (item.exercise.category as string) === 'omt' || item.exercise.id.startsWith('OMT');
-                  return false;
-                });
-                if (filtered.length > 0) {
-                  const firstIncomplete = filtered.find(a => {
-                    const isDone = isLockedToday || completedMap[a.assignment.id] || a.assignment.status === 'completed';
-                    return !isDone;
-                  });
-                  setSelectedExercise(firstIncomplete ? firstIncomplete.exercise : filtered[0].exercise);
-                }
-              }}
-              className={`px-3.5 py-2 rounded-2xl text-xs font-black shrink-0 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
-                isActive
-                  ? 'bg-purple-700 text-white shadow-md'
-                  : 'bg-white text-[#4A267A] hover:bg-purple-50 border border-purple-200/70'
-              }`}
-            >
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
+      
       {/* Locked Status Banner if day is completed and locked */}
       {isLockedToday && (
-        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white shadow-lg space-y-3">
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white shadow-lg space-y-3 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
@@ -521,7 +480,6 @@ export default function AssignedExercisesView({
                 </p>
               </div>
             </div>
-
             <button
               type="button"
               onClick={() => {
@@ -537,112 +495,152 @@ export default function AssignedExercisesView({
         </div>
       )}
 
-      {/* Assigned Exercise List */}
-      {filteredAssignedItems.length === 0 ? (
-        <div className="p-12 text-center bg-purple-50/40 rounded-3xl border border-purple-100 space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-purple-100/80 text-purple-700 flex items-center justify-center mx-auto text-2xl shadow-2xs">
-            🧘
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-base font-black text-slate-800">คุณหมอยังไม่ได้มอบหมายแบบฝึกหัดประจำสัปดาห์นี้</h3>
-            <p className="text-xs text-slate-500 font-medium max-w-md mx-auto">
-              ระบบจะแสดงรายการแบบฝึกหัดเมื่อคุณหมอประจำตัวจัดสรรรายการการบ้านประจำสัปดาห์รายบุคคลให้ครับ/ค่ะ
-            </p>
-          </div>
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>กลับสู่หน้าหลัก</span>
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-sm font-extrabold text-[#1C1929] uppercase tracking-wider flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-purple-600" />
-              <span>ลำดับภารกิจ ({filteredAssignedItems.length} รายการ)</span>
-            </h2>
-            <span className="text-xs text-slate-500 font-medium">
-              ฝึกทีละด่านและกดบันทึกเพื่อก้าวไปด่านถัดไป
-            </span>
-          </div>
+      {/* Assigned Exercise List Grouped By Category */}
+      {(() => {
+        const groupedCategories = [
+          {
+            id: 'gns',
+            label: '🥗 [1] โภชนาการ (GNS)',
+            color: 'emerald',
+            bg: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+            items: assignedItems.filter(i => i.exercise.category === 'nutrition' || i.exercise.id === 'nutrition_gns')
+          },
+          {
+            id: 'sleep',
+            label: '🌙 [2] การนอน & อุปกรณ์ EF',
+            color: 'indigo',
+            bg: 'bg-indigo-50 border-indigo-200 text-indigo-900',
+            items: assignedItems.filter(i => i.exercise.category === 'sleep' || i.exercise.category === 'appliance' || i.exercise.id.startsWith('EFA') || i.exercise.id === 'sleep_ef')
+          },
+          {
+            id: 'exercise',
+            label: '🏃 [3] ออกกำลังกายเพิ่มความสูง',
+            color: 'amber',
+            bg: 'bg-amber-50 border-amber-200 text-amber-900',
+            items: assignedItems.filter(i => i.exercise.category === 'posture' || i.exercise.category === 'movement' || i.exercise.category === 'jump' || i.exercise.category === 'strength' || i.exercise.category === 'core' || i.exercise.id.startsWith('EX_') || i.exercise.id.startsWith('posture'))
+          },
+          {
+            id: 'omt',
+            label: '👄 [4] แบบฝึกกล้ามเนื้อปาก OMT',
+            color: 'purple',
+            bg: 'bg-purple-50 border-purple-200 text-purple-900',
+            items: assignedItems.filter(i => i.exercise.category === 'breathing' || i.exercise.category === 'lips' || i.exercise.category === 'tongue' || i.exercise.category === 'swallowing' || i.exercise.id.startsWith('swallowing') || i.exercise.id.startsWith('cheek_jaw') || (i.exercise.category as string) === 'omt' || i.exercise.id.startsWith('OMT'))
+          }
+        ].filter(cat => cat.items.length > 0);
 
-          <div className="grid grid-cols-1 gap-4">
-            {filteredAssignedItems.map(({ assignment, exercise }, index) => {
-              const isDone = isLockedToday || completedMap[assignment.id] || assignment.status === 'completed';
-
-              return (
-                <div 
-                  key={assignment.id} 
-                  onClick={() => { 
-                    setSelectedExercise(exercise); 
-                    if (onExerciseView) onExerciseView(exercise.id); 
-                  }}
-                  className={`aurora-card p-5 sm:p-6 rounded-3xl border transition-all cursor-pointer ${
-                    isDone 
-                      ? 'bg-emerald-50/60 border-emerald-200/80' 
-                      : 'bg-white border-purple-200/80 hover:border-purple-300 shadow-sm hover:shadow-md'
-                  }`}
+        if (groupedCategories.length === 0) {
+          return (
+            <div className="p-12 text-center bg-purple-50/40 rounded-3xl border border-purple-100 space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-purple-100/80 text-purple-700 flex items-center justify-center mx-auto text-2xl shadow-2xs">
+                🧘
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-slate-800">คุณหมอยังไม่ได้มอบหมายแบบฝึกหัดประจำสัปดาห์นี้</h3>
+                <p className="text-xs text-slate-500 font-medium max-w-md mx-auto">
+                  ระบบจะแสดงรายการแบบฝึกหัดเมื่อคุณหมอประจำตัวจัดสรรรายการการบ้านประจำสัปดาห์รายบุคคลให้ครับ/ค่ะ
+                </p>
+              </div>
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center justify-center">
-                          {index + 1}
-                        </span>
-                        <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-purple-100/70 text-purple-800 border border-purple-200/60">
-                          {exercise.category === 'nutrition' ? 'ด่านที่ 1 โภชนาการ GNS' : (exercise.category === 'sleep' || exercise.category === 'appliance') ? 'ด่านที่ 2 การนอน & EF' : (exercise.category === 'posture' || exercise.category === 'movement' || exercise.category === 'jump' || exercise.category === 'strength') ? 'ด่านที่ 3 เพิ่มความสูง & บุคลิกภาพ' : 'ด่านที่ 4 แบบฝึก OMT'} • {exercise.durationMinutes || assignment.durationMinutes || 5} นาที
-                        </span>
-                        {isDone ? (
-                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                            <Check className="w-3 h-3" /> สำเร็จแล้ว ✓
-                          </span>
-                        ) : (
-                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                            ⏳ ค้างส่ง
-                          </span>
-                        )}
-                      </div>
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>กลับสู่หน้าหลัก</span>
+                </button>
+              )}
+            </div>
+          );
+        }
 
-                      <h3 className="text-base sm:text-lg font-black text-[#1C1929] leading-snug">
-                        {exercise.title}
-                      </h3>
-                      {exercise.subTitle && (
-                        <p className="text-xs font-bold text-purple-700">
-                          {exercise.subTitle}
-                        </p>
-                      )}
-                      <p className="text-xs text-[#59556E] font-medium leading-relaxed">
-                        {assignment.instruction || exercise.purpose || exercise.description}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-purple-100">
-                      <button
-                        type="button"
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
+        return (
+          <div className="space-y-8">
+            {groupedCategories.map(category => (
+              <div key={category.id} className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between px-1 gap-2 border-b border-slate-200 pb-2">
+                  <h2 className="text-base font-extrabold text-[#1C1929] uppercase tracking-wider flex items-center gap-2">
+                    <span>{category.label}</span>
+                  </h2>
+                  <span className={"text-[11px] font-bold px-2.5 py-1 rounded-lg border " + category.bg}>
+                    {category.items.length} ภารกิจ
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  {category.items.map(({ assignment, exercise }, index) => {
+                    const isDone = isLockedToday || completedMap[assignment.id] || assignment.status === 'completed';
+                    
+                    return (
+                      <div 
+                        key={assignment.id} 
+                        onClick={() => { 
                           setSelectedExercise(exercise); 
                           if (onExerciseView) onExerciseView(exercise.id); 
                         }}
-                        className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md min-h-[44px]"
+                        className={`aurora-card p-5 sm:p-6 rounded-3xl border transition-all cursor-pointer ${
+                          isDone 
+                            ? 'bg-emerald-50/60 border-emerald-200/80' 
+                            : 'bg-white border-purple-200/80 hover:border-purple-300 shadow-sm hover:shadow-md'
+                        }`}
                       >
-                        <Play className="w-4 h-4 text-white" />
-                        <span>{isDone ? 'ดูทบทวนด่านนี้' : `เริ่มฝึกด่านนี้`}</span>
-                      </button>
-                    </div>
-                  </div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          <div className="space-y-2 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center justify-center">
+                                {index + 1}
+                              </span>
+                              <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                เวลาเป้าหมาย: {exercise.durationMinutes || assignment.durationMinutes || 5} นาที
+                              </span>
+                              {isDone ? (
+                                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                  <Check className="w-3 h-3" /> สำเร็จแล้ว ✓
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                  ⏳ ค้างส่ง
+                                </span>
+                              )}
+                            </div>
+                            
+                            <h3 className="text-base sm:text-lg font-black text-[#1C1929] leading-snug">
+                              {exercise.title}
+                            </h3>
+                            {exercise.subTitle && (
+                              <p className="text-xs font-bold text-purple-700">
+                                {exercise.subTitle}
+                              </p>
+                            )}
+                            <p className="text-xs text-[#59556E] font-medium leading-relaxed">
+                              {assignment.instruction || exercise.purpose || exercise.description}
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-purple-100">
+                            <button
+                              type="button"
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setSelectedExercise(exercise); 
+                                if (onExerciseView) onExerciseView(exercise.id); 
+                              }}
+                              className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md min-h-[44px]"
+                            >
+                              <Play className="w-4 h-4 text-white" />
+                              <span>{isDone ? 'ดูทบทวนด่านนี้' : `เริ่มฝึกด่านนี้`}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Confirmation Modal upon saving final exercise */}
       <AnimatePresence>

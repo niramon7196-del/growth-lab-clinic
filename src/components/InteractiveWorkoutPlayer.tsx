@@ -32,9 +32,20 @@ export interface WorkoutExerciseItem {
 }
 
 export interface WorkoutAssessmentData {
-  softLanding: boolean;
-  kneeAlignment: boolean;
-  trunkControl: boolean;
+  // Movement (Default)
+  softLanding?: boolean;
+  kneeAlignment?: boolean;
+  trunkControl?: boolean;
+  // OMT
+  tonguePosture?: boolean;
+  lipSeal?: boolean;
+  nasalBreathing?: boolean;
+  // EF / Appliance
+  wearTimeSufficient?: boolean;
+  deviceCleaned?: boolean;
+  // Vitals
+  height?: number;
+  
   painFree: boolean;
   needsImprovement: boolean;
   needsImprovementNote?: string;
@@ -101,6 +112,16 @@ export default function InteractiveWorkoutPlayer({
   const [softLanding, setSoftLanding] = useState<boolean>(true);
   const [kneeAlignment, setKneeAlignment] = useState<boolean>(true);
   const [trunkControl, setTrunkControl] = useState<boolean>(true);
+  
+  // OMT & EF Assessment State
+  const [tonguePosture, setTonguePosture] = useState<boolean>(true);
+  const [lipSeal, setLipSeal] = useState<boolean>(true);
+  const [nasalBreathing, setNasalBreathing] = useState<boolean>(true);
+  const [wearTimeSufficient, setWearTimeSufficient] = useState<boolean>(true);
+  const [deviceCleaned, setDeviceCleaned] = useState<boolean>(true);
+  
+  // Vitals State
+  const [heightInput, setHeightInput] = useState<string>('');
   const [painFree, setPainFree] = useState<boolean>(true);
   const [needsImprovement, setNeedsImprovement] = useState<boolean>(false);
   const [improvementNote, setImprovementNote] = useState<string>('');
@@ -265,6 +286,12 @@ export default function InteractiveWorkoutPlayer({
       softLanding,
       kneeAlignment,
       trunkControl,
+      tonguePosture,
+      lipSeal,
+      nasalBreathing,
+      wearTimeSufficient,
+      deviceCleaned,
+      height: heightInput ? Number(heightInput) : undefined,
       painFree,
       needsImprovement,
       needsImprovementNote: improvementNote,
@@ -738,41 +765,116 @@ export default function InteractiveWorkoutPlayer({
                   </span>
                 </div>
 
-                {/* 1. Landing Quality Checklist */}
+                {/* Dynamic Assessment Checklist based on categoryTag */}
                 <div className="space-y-2">
                   <span className="text-[11px] font-black text-slate-700 block">
-                    1. คุณภาพการทรงตัวและการลงน้ำหนัก (Landing Quality):
+                    1. ประเมินคุณภาพและการปฏิบัติตัว (Daily Assessment):
                   </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${softLanding ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                      <input
-                        type="checkbox"
-                        checked={softLanding}
-                        onChange={(e) => setSoftLanding(e.target.checked)}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>✓ ย่อเข่าซับแรงนุ่มนวล</span>
-                    </label>
+                  
+                  {/* OMT Specific */}
+                  {categoryTag === 'OMT' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${tonguePosture ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={tonguePosture}
+                          onChange={(e) => setTonguePosture(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ ลิ้นแตะเพดานปาก</span>
+                      </label>
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${lipSeal ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={lipSeal}
+                          onChange={(e) => setLipSeal(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ ปิดริมฝีปากสนิท</span>
+                      </label>
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${nasalBreathing ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={nasalBreathing}
+                          onChange={(e) => setNasalBreathing(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ หายใจทางจมูก</span>
+                      </label>
+                    </div>
+                  )}
 
-                    <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${kneeAlignment ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                      <input
-                        type="checkbox"
-                        checked={kneeAlignment}
-                        onChange={(e) => setKneeAlignment(e.target.checked)}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>✓ เข่าตรงไม่บิดเข้าใน</span>
-                    </label>
+                  {/* EF / Appliance Specific */}
+                  {categoryTag === 'APPLIANCE' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${wearTimeSufficient ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={wearTimeSufficient}
+                          onChange={(e) => setWearTimeSufficient(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ ใส่เครื่องมือครบตามเวลา</span>
+                      </label>
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${deviceCleaned ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={deviceCleaned}
+                          onChange={(e) => setDeviceCleaned(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ ทำความสะอาดเครื่องมือแล้ว</span>
+                      </label>
+                    </div>
+                  )}
 
-                    <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${trunkControl ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                      <input
-                        type="checkbox"
-                        checked={trunkControl}
-                        onChange={(e) => setTrunkControl(e.target.checked)}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>✓ ลำตัวตั้งตรงมั่นคง</span>
+                  {/* Exercise Default Specific */}
+                  {categoryTag !== 'OMT' && categoryTag !== 'APPLIANCE' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${softLanding ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={softLanding}
+                          onChange={(e) => setSoftLanding(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ ย่อเข่าซับแรงนุ่มนวล</span>
+                      </label>
+
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${kneeAlignment ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={kneeAlignment}
+                          onChange={(e) => setKneeAlignment(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ เข่าตรงไม่บิดเข้าใน</span>
+                      </label>
+
+                      <label className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all ${trunkControl ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={trunkControl}
+                          onChange={(e) => setTrunkControl(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>✓ ลำตัวตั้งตรงมั่นคง</span>
+                      </label>
+                    </div>
+                  )}
+                  
+                  {/* General Intake: Height */}
+                  <div className="pt-2 mt-2 border-t border-slate-100">
+                    <label className="text-[11px] font-black text-slate-700 block mb-1">
+                      ส่วนสูงล่าสุด (Height) ซม. <span className="text-slate-400 font-normal">(ถ้ามี)</span>:
                     </label>
+                    <input
+                      type="number"
+                      value={heightInput}
+                      onChange={(e) => setHeightInput(e.target.value)}
+                      placeholder="เช่น 120"
+                      className="w-full sm:w-1/3 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+                    />
                   </div>
                 </div>
 

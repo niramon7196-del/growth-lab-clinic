@@ -185,7 +185,6 @@ export async function cloudPost<T = any>(
     action,
     payload,
     timestamp: new Date().toISOString(),
-    // Include top-level attributes for backwards-compatible scripts
     ...payload
   };
 
@@ -1101,7 +1100,15 @@ export async function logDaily(
     patientId: (dailyData.patientId || dailyData.hn || '').trim(),
     date: dailyData.date || new Date().toISOString().split('T')[0],
     time: dailyData.time || new Date().toTimeString().split(' ')[0],
-    timestamp: dailyData.timestamp || new Date().toISOString()
+    timestamp: dailyData.timestamp || new Date().toISOString(),
+    patientName: dailyData.patientName || dailyData.name || '',
+    exerciseId: dailyData.exerciseId || '',
+    exerciseTitle: dailyData.exerciseTitle || dailyData.actionName || '',
+    durationSec: dailyData.durationSec || dailyData.durationSeconds || 0,
+    reps: dailyData.reps || dailyData.completedCount || 0,
+    score: dailyData.score || dailyData.progress || 0,
+    satisfaction: dailyData.satisfaction || 5,
+    status: dailyData.status || 'completed'
   };
 
   // 1. Save locally first
@@ -1144,6 +1151,10 @@ export async function saveExercise(
     reps: exerciseData.reps || 10,
     score: exerciseData.score ?? 100,
     satisfaction: exerciseData.satisfaction ?? 5,
+    patientName: exerciseData.patientName || exerciseData.name || '',
+    exerciseTitle: exerciseData.exerciseTitle || '',
+    durationSec: exerciseData.durationSec || exerciseData.durationSeconds || (exerciseData.duration * 60) || 0,
+    status: exerciseData.status || 'completed',
     date: exerciseData.date || new Date().toISOString().split('T')[0],
     timestamp: exerciseData.timestamp || new Date().toISOString()
   };
@@ -1197,6 +1208,8 @@ export async function logExerciseSession(
     startTime: sessionData.startTime || nowTime,
     endTime: sessionData.endTime || (isComplete ? nowTime : ''),
     durationSeconds: sessionData.durationSeconds || 0,
+    durationSec: sessionData.durationSec || sessionData.durationSeconds || 0,
+    satisfaction: sessionData.satisfaction || 5,
     durationText: sessionData.durationText || '',
     durationMinutes: sessionData.durationSeconds ? Math.ceil(sessionData.durationSeconds / 60) : 0,
     reps: sessionData.reps || 0,
