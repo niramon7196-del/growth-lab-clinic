@@ -2739,7 +2739,7 @@ export default function App() {
     return [
       'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'นัดหมาย', 'การแจ้งเตือน', 'ระบบ / โปรไฟล์', 'โปรไฟล์',
       'ติดตามผล', 'ติดตามการรักษา', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After', 'QR', 'Check-In',
-      'แบบฝึกหัดที่ได้รับมอบหมาย', 'รายงาน', 'Clinical Source', 'เอกสารสำคัญโครงการ', 'Project Dossier', 'บุคลากร', 'Staff Management', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การบ้านและ Progress',
+      'แบบฝึกหัดที่ได้รับมอบหมาย', 'รายงาน',  'บุคลากร', 'Staff Management', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การบ้านและ Progress',
       'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
     ];
   }, [userRole, isPatient, isDeveloper]);
@@ -2785,11 +2785,11 @@ export default function App() {
       case 'Staff Management':
       case 'User Management':
         return 'บุคลากร';
-      case 'Clinical Source':
-      case 'Project Dossier':
-      case 'เอกสารสำคัญโครงการ':
-      case 'เอกสารสำคัญโครงสร้างระบบ':
-        return '📁 เอกสารสำคัญโครงการ (Project Dossier)';
+      
+      
+      
+    
+      
       case 'Executive Summary':
         return 'Executive Summary';
       default:
