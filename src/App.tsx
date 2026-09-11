@@ -2576,7 +2576,7 @@ export default function App() {
   // Role Access Separation: Medical Staff vs Caregiver/Patient
   const currentUser = authService.getCurrentUser();
   const currentStaffAccount = staffAccounts.find(s => s.username === currentUser?.username);
-  const isPatient = !isAdmin && (viewMode === 'patient' || userRole === 'PATIENT');
+  const isPatient = viewMode === 'patient' || userRole === 'PATIENT';
   const isClinicOwnerOrFullAccess = isAdmin || userRole === 'CLINIC_OWNER' || userRole === 'DOCTOR' || userRole === 'ADMIN' || userRole === 'DEVELOPER';
 
   // Check if current user is Developer (email: "niramon7196@gmail.com" or Role: "DEVELOPER")
@@ -2670,6 +2670,9 @@ export default function App() {
   const filteredStaffMenuGroups = useMemo(() => {
     return staffMenuGroups.map(group => {
       const filteredItems = group.items.filter(item => {
+        // ห้ามให้ฝั่งคนไข้เห็นเมนูเอกสารสำคัญโครงการเด็ดขาด แม้จะหลุดเข้ามาในโหมดนี้
+        if (isPatient && (item.id === 'Clinical Source' || item.id === 'Project Dossier' || item.label.includes('เอกสารสำคัญ'))) return false;
+        
         if (isClinicOwnerOrFullAccess) return true;
         const key = item.permissionKey || item.id;
         if (staffPermissions && (staffPermissions as Record<string, boolean>)[key] !== undefined) {
@@ -2682,7 +2685,7 @@ export default function App() {
         items: filteredItems
       };
     }).filter(group => group.items.length > 0);
-  }, [staffMenuGroups, isClinicOwnerOrFullAccess, staffPermissions, userRole]);
+  }, [staffMenuGroups, isClinicOwnerOrFullAccess, staffPermissions, userRole, isPatient]);
 
   const fullStaffMenuItems = useMemo(() => {
     return staffMenuGroups.flatMap(g => g.items);
@@ -2717,7 +2720,7 @@ export default function App() {
         'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
         'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
         'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
-        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
+        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
       ];
     }
     if (userRole === 'ADMIN') {
@@ -2728,7 +2731,7 @@ export default function App() {
         'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
         'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
         'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
-        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
+        'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
       ];
     }
     if (isPatient) {
@@ -2739,7 +2742,7 @@ export default function App() {
     return [
       'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'นัดหมาย', 'การแจ้งเตือน', 'ระบบ / โปรไฟล์', 'โปรไฟล์',
       'ติดตามผล', 'ติดตามการรักษา', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After', 'QR', 'Check-In',
-      'แบบฝึกหัดที่ได้รับมอบหมาย', 'รายงาน',  'บุคลากร', 'Staff Management', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การบ้านและ Progress',
+      'แบบฝึกหัดที่ได้รับมอบหมาย', 'รายงาน', 'Clinical Source', 'เอกสารสำคัญโครงการ', 'Project Dossier', 'บุคลากร', 'Staff Management', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การบ้านและ Progress',
       'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
     ];
   }, [userRole, isPatient, isDeveloper]);
@@ -2785,11 +2788,11 @@ export default function App() {
       case 'Staff Management':
       case 'User Management':
         return 'บุคลากร';
-      
-      
-      
-    
-      
+      case 'Clinical Source':
+      case 'Project Dossier':
+      case 'เอกสารสำคัญโครงการ':
+      case 'เอกสารสำคัญโครงสร้างระบบ':
+        return '📁 เอกสารสำคัญโครงการ (Project Dossier)';
       case 'Executive Summary':
         return 'Executive Summary';
       default:
