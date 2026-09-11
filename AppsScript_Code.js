@@ -13,22 +13,30 @@ function doPost(e) {
     // 2. แยกแยะประเภทข้อมูลและกำหนดแท็บปลายทาง (Action Routing)
     var aLower = action.toLowerCase();
     
-    if (aLower === 'saveappointment' || aLower === 'createappointment' || aLower === 'appointment') {
-      sheetName = 'Appointments';
-    } else if (aLower === 'saveexercise' || aLower.indexOf('แบบฝึกหัด') !== -1) {
-      sheetName = 'Exercise_Logs';
-    } else if (
-      aLower === 'logdaily' || 
-      aLower === 'save_daily_summary' || 
-      aLower.indexOf('เช็คอิน') !== -1 ||
-      aLower.indexOf('โภชนาการ') !== -1 ||
-      aLower.indexOf('การนอน') !== -1 ||
-      aLower.indexOf('gns') !== -1 ||
-      aLower.indexOf('ef') !== -1
-    ) {
-      sheetName = 'Daily_Logs';
-    } else if (!sheetName) {
-      sheetName = 'Logs'; // ค่าเริ่มต้นหากไม่ได้ระบุ
+    // หากระบุ sheetName มาใน payload ชัดเจนแล้ว ให้ยึดตามนั้น
+    // แต่ถ้าไม่ระบุ ให้เดาจาก action
+    if (!sheetName) {
+      if (aLower === 'savepatient' || aLower === 'registerpatient') {
+        sheetName = 'Patients';
+      } else if (aLower === 'saveappointment' || aLower === 'createappointment' || aLower === 'appointment') {
+        sheetName = 'Appointments';
+      } else if (aLower === 'saveexercise' || aLower.indexOf('แบบฝึกหัด') !== -1) {
+        sheetName = 'Exercise_Logs';
+      } else if (
+        aLower === 'logdaily' || 
+        aLower === 'save_daily_summary' || 
+        aLower.indexOf('เช็คอิน') !== -1 ||
+        aLower.indexOf('โภชนาการ') !== -1 ||
+        aLower.indexOf('การนอน') !== -1 ||
+        aLower.indexOf('gns') !== -1 ||
+        aLower.indexOf('ef') !== -1
+      ) {
+        sheetName = 'Daily_Logs';
+      } else if (aLower === 'save_monthly_report') {
+        sheetName = 'Monthly_Logs';
+      } else {
+        sheetName = 'Logs'; // ค่าเริ่มต้นหากไม่ได้ระบุ
+      }
     }
 
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();

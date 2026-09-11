@@ -1077,11 +1077,17 @@ export default function App() {
     }, 4500);
 
     try {
-      // 1. Direct call to cloudApi.getPatients() and cloudApi.getDailyLogs()
-      const [cloudRes, cloudLogsRes] = await Promise.all([
+      // 1. Direct call to cloudApi.getPatients(), cloudApi.getDailyLogs(), and listAppointments
+      const [cloudRes, cloudLogsRes, apptsRes] = await Promise.all([
         cloudApi.getPatients(),
-        cloudApi.getDailyLogs()
+        cloudApi.getDailyLogs(),
+        dataAdapter.listAppointments().catch(() => null)
       ]);
+
+      if (apptsRes && Array.isArray(apptsRes)) {
+        setAppointments(apptsRes);
+        saveStateToLocal('growth_lab_appointments', apptsRes);
+      }
 
       if (cloudLogsRes && Array.isArray(cloudLogsRes)) {
         setLogs(cloudLogsRes);
@@ -2421,10 +2427,11 @@ export default function App() {
 
   // Logs Actions
   const handleAddLog = (newLog: Omit<SessionLog, 'id'>) => {
-    const updated = [...logs, { ...newLog, id: `log_${Date.now()}` }];
+    const createdLog: SessionLog = { ...newLog, id: `log_${Date.now()}` };
+    const updated = [...logs, createdLog];
     setLogs(updated);
     saveStateToLocal('growth_lab_logs', updated);
-    dataAdapter.saveSessionLogs(updated).catch(e => console.warn('[App] Firestore log sync error:', e));
+    dataAdapter.saveSessionLogs(updated, createdLog).catch(e => console.warn('[App] Firestore log sync error:', e));
 
     triggerFeedback('บันทึกสำเร็จ', 'success');
   };
@@ -2451,9 +2458,6 @@ export default function App() {
     setAppointments(updated);
     saveStateToLocal('growth_lab_appointments', updated);
     dataAdapter.saveAppointments(updated, createdApp).catch(e => console.warn('[App] Appointment sync error:', e));
-
-    // Sync directly to Google Sheets Appointments tab
-    syncAppointmentToGoogleSheets(getWebhookUrl(), createdApp).catch(e => console.warn('[App] Google Sheets appointment sync error:', e));
 
     // Add Patient Notification Sync
     if (newApp.patientId) {
@@ -2484,9 +2488,6 @@ export default function App() {
     setAppointments(updated);
     saveStateToLocal('growth_lab_appointments', updated);
     dataAdapter.saveAppointments(updated, updatedApp).catch(e => console.warn('[App] Appointment update sync error:', e));
-    if (updatedApp) {
-      syncAppointmentToGoogleSheets(getWebhookUrl(), updatedApp).catch(e => console.warn('[App] Google Sheets appointment update sync error:', e));
-    }
     triggerFeedback('อัปเดตสถานะนัดหมายสำเร็จ', 'success');
   };
 
@@ -2495,7 +2496,6 @@ export default function App() {
     setAppointments(updated);
     saveStateToLocal('growth_lab_appointments', updated);
     dataAdapter.saveAppointments(updated, updatedAppt).catch(e => console.warn('[App] Appointment update sync error:', e));
-    syncAppointmentToGoogleSheets(getWebhookUrl(), updatedAppt).catch(e => console.warn('[App] Google Sheets appointment update sync error:', e));
     triggerFeedback('อัปเดตข้อมูลนัดหมายสำเร็จ', 'success');
   };
 

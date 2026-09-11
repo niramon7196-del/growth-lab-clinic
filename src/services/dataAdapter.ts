@@ -1677,13 +1677,18 @@ export const dataAdapter = {
     }
   },
 
-  async saveSessionLogs(logs: SessionLog[]): Promise<void> {
+  async saveSessionLogs(logs: SessionLog[], newLog?: SessionLog): Promise<void> {
     localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(logs));
     if (isFirebaseConfigured && db) {
       try {
-        for (const logItem of logs) {
-          const docRef = doc(db, 'logs', logItem.id);
-          await setDoc(docRef, logItem);
+        if (newLog) {
+          const docRef = doc(db, 'logs', newLog.id);
+          await setDoc(docRef, newLog);
+        } else {
+          for (const logItem of logs) {
+            const docRef = doc(db, 'logs', logItem.id);
+            await setDoc(docRef, logItem);
+          }
         }
       } catch (e) {
         console.warn('[dataAdapter.saveSessionLogs] Firestore write warning:', e);
@@ -1692,9 +1697,9 @@ export const dataAdapter = {
 
     // Sync latest logs to Google Sheets
     try {
-      if (logs.length > 0) {
-        const latest = logs[0];
-        syncSessionLogToGoogleSheets(getWebhookUrl(), latest).catch(e => console.warn('[dataAdapter.saveSessionLogs] Google Sheets sync error:', e));
+      const logToSync = newLog || (logs.length > 0 ? logs[logs.length - 1] : null);
+      if (logToSync) {
+        syncSessionLogToGoogleSheets(getWebhookUrl(), logToSync).catch(e => console.warn('[dataAdapter.saveSessionLogs] Google Sheets sync error:', e));
       }
     } catch (e) {
       console.warn('[dataAdapter.saveSessionLogs] Google Sheets sync dispatch error:', e);

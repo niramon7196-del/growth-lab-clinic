@@ -88,6 +88,7 @@ export async function savePatientToGoogleSheets(
 
     const requestBody = {
       action: 'savePatient',
+      sheetName: 'Patients',
       payload: {
         hn,
         name: fullName,
@@ -686,7 +687,7 @@ export async function syncNutritionToGoogleSheets(
   try {
     const bodyData = {
       action: payload.action || 'บันทึกโภชนาการ GNS',
-      sheetName: 'Exercise_Logs',
+      sheetName: 'Daily_Logs',
       timestamp: new Date().toISOString(),
       hn: payload.hn || '',
       patientId: payload.patientId || '',
@@ -750,7 +751,7 @@ export async function syncSleepEfToGoogleSheets(
   try {
     const bodyData = {
       action: payload.action || 'บันทึกข้อมูลการนอน & EF',
-      sheetName: 'Exercise_Logs',
+      sheetName: 'Daily_Logs',
       timestamp: new Date().toISOString(),
       hn: payload.hn || '',
       patientId: payload.patientId || '',
@@ -806,7 +807,7 @@ export async function syncDailyCheckInToGoogleSheets(
   try {
     const bodyData = {
       action: 'logDaily',
-      sheetName: 'Exercise_Logs',
+      sheetName: 'Daily_Logs',
       altAction: payload.action || 'เช็คอินประจำวัน (Daily Check-in)',
       actionName: payload.actionName || 'เช็คอินประจำวัน (Daily Check-in)',
       patientId: payload.patientId || payload.hn || '',
@@ -868,7 +869,7 @@ export async function syncCleanDailySummaryToGoogleSheets(
   try {
     const payloadData = {
       action: 'SAVE_DAILY_SUMMARY',
-      sheetName: 'Exercise_Logs',
+      sheetName: 'Daily_Logs',
       timestamp: new Date().toISOString(),
       patientId: summaryData.patientId,
       hn: summaryData.hn,
@@ -955,6 +956,7 @@ export async function syncMonthlyAnalyticsToGoogleSheets(
   try {
     const bodyData = {
       action: 'SAVE_MONTHLY_REPORT',
+      sheetName: 'Logs',
       actionName: 'รายงานสรุปภาพรวมสิ้นเดือน (Monthly Analytics Report)',
       timestamp: new Date().toISOString(),
       month: monthlyReportData.month,
@@ -1244,6 +1246,7 @@ export async function syncSessionLogToGoogleSheets(
   try {
     const payloadData = {
       action: 'SAVE_LOG',
+      sheetName: 'Logs',
       actionName: 'บันทึกประวัติการใช้งาน (Save Log)',
       timestamp: logData.timestamp || new Date().toISOString(),
       id: logData.id,
