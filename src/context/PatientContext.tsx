@@ -18,7 +18,7 @@ import { cascadeDeletePatientAndRevokeQR } from '../services/qrRevokeService';
 import { isFirebaseConfigured, subscribePatientByHN } from '../services/firebase';
 import { authService } from '../services/authService';
 import { getTodayDateString, syncPatientProgress } from '../utils/checkInCalculations';
-import { getParamCaseInsensitive } from '../utils/patientUtils';
+import { getParamCaseInsensitive, deduplicatePatientList, deduplicateAppointments } from '../utils/patientUtils';
 import { syncDailyCheckInToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
 
 export interface PatientContextStats {
@@ -380,40 +380,60 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('growth_lab_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // Auto-fetch patients and appointments from dataAdapter (Google Sheets / Storage / Firestore) on mount
+  // Initialize state from local cache on mount (remote sync only via manual button)
   useEffect(() => {
     setIsLoading(false);
 
-    dataAdapter.listMembers().then(remote => {
-      if (remote && remote.length > 0) {
-        setPatients(remote.map(normalizePatientRecord));
+    // Read local cache without hitting Google Sheets
+    dataAdapter.listMembers(false).then(cached => {
+      if (cached && cached.length > 0) {
+        const normalized = deduplicatePatientList(cached.map(normalizePatientRecord));
+        setPatients(prev => {
+          if (prev.length === normalized.length && JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+          return normalized;
+        });
       }
-    }).catch(e => console.warn('[PatientContext] Remote members sync error:', e));
+    }).catch(e => console.warn('[PatientContext] Cache members read error:', e));
 
-    dataAdapter.listAppointments().then(remote => {
-      if (remote && remote.length > 0) setAppointments(remote);
-    }).catch(e => console.warn('[PatientContext] Remote appointments sync error:', e));
-
-    dataAdapter.listSessionLogs().then(remote => {
-      if (remote && remote.length > 0) setLogs(remote);
-    }).catch(e => console.warn('[PatientContext] Remote logs sync error:', e));
-
-    dataAdapter.getClinicSettings().then(remote => {
-      if (remote) setSettings(remote);
-    }).catch(e => console.warn('[PatientContext] Remote settings sync error:', e));
+    dataAdapter.listAppointments(false).then(cached => {
+      if (cached && cached.length > 0) {
+        const uniqueAppts = deduplicateAppointments(cached);
+        setAppointments(prev => {
+          if (prev.length === uniqueAppts.length && JSON.stringify(prev) === JSON.stringify(uniqueAppts)) return prev;
+          return uniqueAppts;
+        });
+      }
+    }).catch(e => console.warn('[PatientContext] Cache appointments read error:', e));
 
     if (!isFirebaseConfigured) return;
 
     const unsubMembers = dataAdapter.subscribeMembers(remote => {
-      if (remote) setPatients(remote.map(normalizePatientRecord));
+      if (remote) {
+        const normalized = deduplicatePatientList(remote.map(normalizePatientRecord));
+        setPatients(prev => {
+          if (prev.length === normalized.length && JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+          return normalized;
+        });
+      }
     });
 
     const unsubApps = dataAdapter.subscribeAppointments(remote => {
-      if (remote) setAppointments(remote);
+      if (remote) {
+        const uniqueAppts = deduplicateAppointments(remote);
+        setAppointments(prev => {
+          if (prev.length === uniqueAppts.length && JSON.stringify(prev) === JSON.stringify(uniqueAppts)) return prev;
+          return uniqueAppts;
+        });
+      }
     });
 
     const unsubLogs = dataAdapter.subscribeSessionLogs(remote => {
-      if (remote) setLogs(remote);
+      if (remote) {
+        setLogs(prev => {
+          if (prev.length === remote.length && JSON.stringify(prev) === JSON.stringify(remote)) return prev;
+          return remote;
+        });
+      }
     });
 
     return () => {

@@ -58,6 +58,7 @@ import { getPatientAssignedExercises } from '../../exerciseHelper';
 import { Logo } from './Logo';
 import { syncAppointmentToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
 import { getCleanPatientDisplayName, getCleanNotes } from './AppointmentsList';
+import { resolvePatientAppointments } from '../utils/appointmentMockService';
 
 interface PatientDashboardProps {
   patient?: Patient;
@@ -642,20 +643,7 @@ export default function PatientDashboard({
 
   const patientLogs = logs.filter(l => l.patientId === patient.id || l.patientId === patient.hn);
   const patientAppointments = useMemo(() => {
-    const fromGlobal = appointments.filter(a => (a.patientId === patient.id || a.patientId === patient.hn || (a as any).hn === patient.hn) && a.status !== 'cancelled');
-    const fromPatientRecord: Appointment[] = (patient.appointments || []).map((pa: any, idx: number) => ({
-      id: pa.id || `pa_${idx}`,
-      patientId: patient.id,
-      patientName: `${patient.firstName} ${patient.lastName}`.trim(),
-      date: pa.date,
-      time: pa.time || '10:00',
-      type: pa.type || 'clinical',
-      notes: pa.notes || pa.title || '',
-      status: pa.status || 'pending'
-    }));
-    const combined = [...fromGlobal, ...fromPatientRecord];
-    const unique = Array.from(new Map(combined.map(item => [item.id || item.date, item])).values());
-    return unique.filter(a => a.status !== 'cancelled').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return resolvePatientAppointments(patient, appointments);
   }, [appointments, patient]);
 
   const age = patient.age || 8;
@@ -895,7 +883,7 @@ export default function PatientDashboard({
       {/* ========================================================================= */}
       <PatientInteractiveCalendar
         patient={patient}
-        appointments={appointments}
+        appointments={patientAppointments}
         onUpdateAppointmentStatus={onUpdateAppointmentStatus}
       />
 

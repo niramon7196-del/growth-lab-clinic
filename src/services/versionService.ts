@@ -208,51 +208,8 @@ export function initVersionChecker(): () => void {
     console.warn('[VersionChecker] localStorage check error', e);
   }
 
-  // 3. Periodic checking & Tab Focus / Visibility Change Engine
-  const runPeriodicCheck = async () => {
-    if (isUpdating) return;
-    const result = await checkRemoteVersion();
-    if (result.hasUpdate) {
-      triggerLiveAutoUpdate(result.remoteVersion);
-    }
-  };
-
-  // Initial remote check after 4 seconds
-  const initialTimeout = setTimeout(() => {
-    runPeriodicCheck();
-  }, 4000);
-
-  // Poll every 45 seconds while open
-  const pollInterval = setInterval(() => {
-    runPeriodicCheck();
-  }, 45000);
-
-  // Check whenever user switches back to this tab (visibilitychange & window focus)
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-      runPeriodicCheck();
-    }
-  };
-
-  const handleWindowFocus = () => {
-    runPeriodicCheck();
-  };
-
-  const handleOnline = () => {
-    runPeriodicCheck();
-  };
-
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('focus', handleWindowFocus);
-  window.addEventListener('online', handleOnline);
-
-  return () => {
-    clearTimeout(initialTimeout);
-    clearInterval(pollInterval);
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    window.removeEventListener('focus', handleWindowFocus);
-    window.removeEventListener('online', handleOnline);
-  };
+  // Background polling and focus/visibility listeners are disabled to prevent page stutter and unwanted reloads
+  return () => {};
 }
 
 /**

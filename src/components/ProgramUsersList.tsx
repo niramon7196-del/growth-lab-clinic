@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -26,6 +26,7 @@ import { Patient } from '../types';
 import { calculateConsistencyMetrics, hasCheckedInToday } from '../utils/checkInCalculations';
 import { useScrollLock } from '../utils';
 import { Logo } from './Logo';
+import { deduplicatePatientList } from '../utils/patientUtils';
 
 interface ProgramUsersListProps {
   patients: Patient[];
@@ -250,7 +251,9 @@ export default function ProgramUsersList({
   };
 
   // Filter & Sort
-  const safePatients = Array.isArray(patients) ? patients : [];
+  const safePatients = useMemo(() => {
+    return deduplicatePatientList(Array.isArray(patients) ? patients : []);
+  }, [patients]);
 
   const filteredAndSortedPatients = safePatients
     .filter((p) => {

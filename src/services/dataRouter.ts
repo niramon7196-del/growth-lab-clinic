@@ -185,10 +185,10 @@ export async function routeAppointmentToGoogleSheets(
 
   // Build clean request body strictly targeting "Appointments"
   const requestBody = {
-    // Actions recognized by Google Apps Script
+    // Actions recognized by Google Apps Script - action: "saveAppointment" is primary
     action: 'saveAppointment',
-    altAction: 'createAppointment',
-    fallbackAction: 'appendRow',
+    altAction: 'saveAppointment',
+    fallbackAction: 'saveAppointment',
     // Sheet routing parameters - MUST BE "Appointments" ONLY
     sheetName: APPOINTMENT_SHEET_NAME,
     targetSheet: APPOINTMENT_SHEET_NAME,
@@ -205,6 +205,7 @@ export async function routeAppointmentToGoogleSheets(
     data: orderedPayload,
     // Nested payload with strict sheet override (clean from any Daily_Logs/Exercise_Logs contamination)
     payload: {
+      action: 'saveAppointment',
       sheetName: APPOINTMENT_SHEET_NAME,
       targetSheet: APPOINTMENT_SHEET_NAME,
       tab: APPOINTMENT_SHEET_NAME,
@@ -236,6 +237,9 @@ export async function routeAppointmentToGoogleSheets(
     time: orderedPayload.Time,
     type: orderedPayload.Type,
     doctor: orderedPayload.Doctor,
+    appointmentDate: orderedPayload.Date,
+    appointmentTime: orderedPayload.Time,
+    doctorName: orderedPayload.Doctor,
     status: orderedPayload.Status,
     notes: orderedPayload.Notes
   };

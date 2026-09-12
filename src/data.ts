@@ -157,7 +157,44 @@ export const generateSeedLogs = (): SessionLog[] => {
   return [];
 };
 
-export const SEED_APPOINTMENTS: Appointment[] = [];
+export const SEED_APPOINTMENTS: Appointment[] = [
+  {
+    id: 'appt_seed_primary_001',
+    patientId: 'PAT-001',
+    patientName: 'น้องพร้อม รัตนากุล',
+    hn: 'HN-001',
+    date: '2026-09-18',
+    time: '10:30',
+    type: 'ตรวจติดตาม OMT & ประเมิน EF Trainer',
+    dentistName: 'ทพญ. นภาพร วรรณษา',
+    status: 'pending',
+    notes: 'ตรวจเช็กความก้าวหน้ากล้ามเนื้อปากและลิ้น + รบกวนนำอุปกรณ์ EF Trainer มาด้วยค่ะ'
+  },
+  {
+    id: 'appt_seed_secondary_002',
+    patientId: 'PAT-001',
+    patientName: 'น้องพร้อม รัตนากุล',
+    hn: 'HN-001',
+    date: '2026-09-26',
+    time: '14:00',
+    type: 'ประเมินการฝึกหายใจทางจมูก & ท่าทางการกลืน',
+    dentistName: 'ทพญ. นภาพร วรรณษา',
+    status: 'pending',
+    notes: 'ตรวจเช็กการกลืนที่ถูกต้องและการวางตำแหน่งลิ้นขณะพัก (Resting Tongue Posture)'
+  },
+  {
+    id: 'appt_seed_completed_003',
+    patientId: 'PAT-001',
+    patientName: 'น้องพร้อม รัตนากุล',
+    hn: 'HN-001',
+    date: '2026-09-04',
+    time: '11:00',
+    type: 'บันทึกภาพถ่าย Before/After & ตรวจสแกนช่องปาก',
+    dentistName: 'ทพญ. นภาพร วรรณษา',
+    status: 'completed',
+    notes: 'คนไข้มาตรวจตามนัด การหายใจทางจมูกและการสบฟันดีขึ้นมาก ให้ฝึกท่าบริหาร OMT ต่อเนื่องทุกวัน'
+  }
+];
 
 export const SEED_NOTIFICATIONS: SystemNotification[] = [];
 

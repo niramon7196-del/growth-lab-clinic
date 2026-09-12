@@ -56,8 +56,7 @@ export default function CheckInView({ patient, onCheckIn, onGoToExercises }: Che
     if (patient.checkInHistory && patient.checkInHistory.length > 0) {
       setDailyLogs(patient.checkInHistory);
     }
-    fetchLiveLogs(patient.hn);
-  }, [patient.hn, patient.id, patient.checkInHistory, fetchLiveLogs]);
+  }, [patient.checkInHistory]);
 
   const effectivePatient = useMemo<Patient>(() => {
     return {
@@ -372,7 +371,7 @@ export default function CheckInView({ patient, onCheckIn, onGoToExercises }: Che
               title="ดึงข้อมูลล่าสุดจาก Google Sheets"
             >
               <RefreshCw className={`w-3 h-3 ${isLoadingLogs ? 'animate-spin' : ''}`} />
-              <span>รีเฟรชชีต</span>
+              <span>รีเฟรชข้อมูล (Sync Sheets)</span>
             </button>
             <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
               {dailyLogs.length} รายการ

@@ -60,7 +60,9 @@ import {
   decodePatientDataFromUrl,
   getPersistentPatientSession,
   clearPersistentPatientSession,
-  savePersistentPatientSession
+  savePersistentPatientSession,
+  deduplicatePatientList,
+  deduplicateAppointments
 } from './utils/patientUtils';
 import { 
   APP_ENV,
@@ -108,6 +110,7 @@ import ExerciseView from './components/ExerciseView';
 import CheckInAnalyticsPanel from './components/CheckInAnalyticsPanel';
 import { getTodayDateString, syncPatientProgress, calculateConsistencyMetrics, formatThaiDate } from './utils/checkInCalculations';
 import { playSuccessChime } from './utils/audioUtils';
+import { resolvePatientAppointments, persistAppointmentLocally } from './utils/appointmentMockService';
 import ProfileLoadingFallback from "./components/ProfileLoadingFallback";
 import NotificationsPanel from './components/NotificationsPanel';
 import WelcomeModal from './components/WelcomeModal';
@@ -781,21 +784,28 @@ export default function App() {
     }
   }, [userRole, activeTab]);
 
-  const triggerFeedback = (message: string, type: FeedbackType = 'success') => {
+  const triggerFeedback = useCallback((message: string, type: FeedbackType = 'success') => {
     const formatted = type === 'success' && !message.startsWith('✓') ? `✓ ${message}` : message;
     setFeedback({ message: formatted, type });
     setTimeout(() => setFeedback(null), 2500);
-  };
+  }, []);
 
   // Reference to the main scrollable content container
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const lastActiveTabRef = useRef(activeTab);
+  const lastSelectedPatientIdRef = useRef(selectedPatientId);
 
-  // Smoothly reset scroll position of the right main content pane to top whenever the tab/patient/subtab changes
+  // Reset scroll position only when switching primary views/tabs, avoiding sudden jumps when interacting with patients, exercises or stages
   useEffect(() => {
-    if (mainContentRef.current) {
-      mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    const tabChanged = lastActiveTabRef.current !== activeTab;
+    if (tabChanged) {
+      lastActiveTabRef.current = activeTab;
+      lastSelectedPatientIdRef.current = selectedPatientId;
+      if (mainContentRef.current) {
+        mainContentRef.current.scrollTo({ top: 0, behavior: 'auto' });
+      }
     }
-  }, [activeTab, selectedPatientId, profileSubTab, selectedHomeworkStage]);
+  }, [activeTab]);
 
   // Settings click handling (Locked for Developer only: email "niramon7196@gmail.com" or role "DEVELOPER")
   const handleGearClick = () => {
@@ -1013,7 +1023,7 @@ export default function App() {
   // Validate selected patient exists in loaded patient list
   useEffect(() => {
     if (selectedPatientId && patients.length > 0 && userRole !== 'PATIENT') {
-      const exists = patients.some(p => p.id === selectedPatientId);
+      const exists = patients.some(p => p.id === selectedPatientId || p.hn === selectedPatientId);
       if (!exists) {
         handleSelectPatient(undefined);
       }
@@ -1068,39 +1078,78 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
+  const isRefreshingRef = useRef<boolean>(false);
+  const lastRefreshTimeRef = useRef<number>(0);
+  const [isSyncingSheets, setIsSyncingSheets] = useState<boolean>(false);
+
   const handleRefreshPatientsFromGoogleSheets = useCallback(async (showToast: boolean = false, isBackground: boolean = false) => {
-    if (!isBackground) {
-      setIsInitialDataLoading(true);
+    const now = Date.now();
+    // Guard against concurrent executions
+    if (isRefreshingRef.current) {
+      return patients;
     }
-    const safetyTimer = setTimeout(() => {
-      setIsInitialDataLoading(false);
-    }, 4500);
+    // Throttle background automated refresh to at most once per 15 seconds
+    if (!showToast && now - lastRefreshTimeRef.current < 15000) {
+      return patients;
+    }
+
+    isRefreshingRef.current = true;
+    lastRefreshTimeRef.current = now;
+    setIsSyncingSheets(true);
+
+    let safetyTimer: any = null;
+    if (!isBackground) {
+      // Only trigger visual initial loading if we have NO cached patients in memory or local storage
+      const hasLocalPatients = (patients && patients.length > 0) || Boolean(localStorage.getItem('growthlab_patients_master') || localStorage.getItem('growth_lab_patients'));
+      if (!hasLocalPatients) {
+        setIsInitialDataLoading(true);
+        safetyTimer = setTimeout(() => {
+          setIsInitialDataLoading(false);
+        }, 3000);
+      }
+    }
 
     try {
       // 1. Direct call to cloudApi.getPatients(), cloudApi.getDailyLogs(), and listAppointments
       const [cloudRes, cloudLogsRes, apptsRes] = await Promise.all([
         cloudApi.getPatients(),
         cloudApi.getDailyLogs(),
-        dataAdapter.listAppointments().catch(() => null)
+        dataAdapter.listAppointments(true).catch(() => null)
       ]);
 
-      if (apptsRes && Array.isArray(apptsRes)) {
-        setAppointments(apptsRes);
-        saveStateToLocal('growth_lab_appointments', apptsRes);
+      if (apptsRes && Array.isArray(apptsRes) && apptsRes.length > 0) {
+        setAppointments(prev => {
+          const merged = deduplicateAppointments([...apptsRes, ...prev]);
+          if (prev.length === merged.length && JSON.stringify(prev) === JSON.stringify(merged)) {
+            return prev;
+          }
+          saveStateToLocal('growth_lab_appointments', merged);
+          return merged;
+        });
       }
 
       if (cloudLogsRes && Array.isArray(cloudLogsRes)) {
-        setLogs(cloudLogsRes);
-        localStorage.setItem('growthlab_logs_cache', JSON.stringify(cloudLogsRes));
+        setLogs(prev => {
+          if (prev.length === cloudLogsRes.length && JSON.stringify(prev) === JSON.stringify(cloudLogsRes)) {
+            return prev;
+          }
+          localStorage.setItem('growthlab_logs_cache', JSON.stringify(cloudLogsRes));
+          return cloudLogsRes;
+        });
       }
 
       if (cloudRes.success && Array.isArray(cloudRes.patients)) {
-        const freshList = cloudRes.patients;
-        setPatients([...freshList]);
-        const serialized = JSON.stringify(freshList);
-        localStorage.setItem('growthlab_patients_master', serialized);
-        localStorage.setItem('growth_lab_patients', serialized);
-        localStorage.setItem('growthlab_patients', serialized);
+        const freshList = deduplicatePatientList(cloudRes.patients);
+        setPatients(prev => {
+          if (prev.length === freshList.length && JSON.stringify(prev) === JSON.stringify(freshList)) {
+            return prev;
+          }
+          const serialized = JSON.stringify(freshList);
+          localStorage.setItem('growthlab_patients_master', serialized);
+          localStorage.setItem('growth_lab_patients', serialized);
+          localStorage.setItem('growthlab_patients', serialized);
+          return freshList;
+        });
         
         if (showToast && triggerFeedback) {
           if (freshList.length > 0) {
@@ -1113,25 +1162,31 @@ export default function App() {
       }
 
       // 2. Fallback to dataAdapter.listMembers()
-      const remoteMembersPromise = dataAdapter.listMembers();
+      const remoteMembersPromise = dataAdapter.listMembers(true);
       const timeoutPromise = new Promise<Patient[] | null>((resolve) => setTimeout(() => resolve(null), 3500));
       const remoteMembers = await Promise.race([remoteMembersPromise, timeoutPromise]);
 
       if (remoteMembers !== null && Array.isArray(remoteMembers)) {
-        setPatients([...remoteMembers]);
-        const serialized = JSON.stringify(remoteMembers);
-        localStorage.setItem('growthlab_patients_master', serialized);
-        localStorage.setItem('growth_lab_patients', serialized);
-        localStorage.setItem('growthlab_patients', serialized);
+        const freshList = deduplicatePatientList(remoteMembers);
+        setPatients(prev => {
+          if (prev.length === freshList.length && JSON.stringify(prev) === JSON.stringify(freshList)) {
+            return prev;
+          }
+          const serialized = JSON.stringify(freshList);
+          localStorage.setItem('growthlab_patients_master', serialized);
+          localStorage.setItem('growth_lab_patients', serialized);
+          localStorage.setItem('growthlab_patients', serialized);
+          return freshList;
+        });
 
         if (showToast && triggerFeedback) {
-          if (remoteMembers.length > 0) {
-            triggerFeedback(`✓ ซิงค์ข้อมูลจาก Google Sheets สำเร็จ (พบ ${remoteMembers.length} ราย)`, 'success');
+          if (freshList.length > 0) {
+            triggerFeedback(`✓ ซิงค์ข้อมูลจาก Google Sheets สำเร็จ (พบ ${freshList.length} ราย)`, 'success');
           } else {
             triggerFeedback('ℹ️ ซิงค์กับ Google Sheets แล้ว (ยังไม่มีข้อมูลคนไข้ในชีต 0 ราย)', 'info');
           }
         }
-        return remoteMembers;
+        return freshList;
       } else {
         const currentLocal = JSON.parse(
           localStorage.getItem('growthlab_patients_master') ||
@@ -1139,7 +1194,8 @@ export default function App() {
           localStorage.getItem('growthlab_patients') || '[]'
         );
         if (currentLocal && Array.isArray(currentLocal)) {
-          setPatients([...currentLocal]);
+          const uniqueLocal = deduplicatePatientList(currentLocal);
+          setPatients(uniqueLocal);
         }
         if (showToast && triggerFeedback) {
           triggerFeedback('⚠️ ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ (กรุณาตรวจสอบอินเทอร์เน็ต)', 'warning');
@@ -1154,7 +1210,8 @@ export default function App() {
         localStorage.getItem('growthlab_patients') || '[]'
       );
       if (currentLocal && Array.isArray(currentLocal)) {
-        setPatients([...currentLocal]);
+        const uniqueLocal = deduplicatePatientList(currentLocal);
+        setPatients(uniqueLocal);
       }
       if (showToast && triggerFeedback) {
         triggerFeedback('⚠️ ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ (กรุณาตรวจสอบอินเทอร์เน็ต)', 'warning');
@@ -1163,6 +1220,8 @@ export default function App() {
     } finally {
       clearTimeout(safetyTimer);
       setIsInitialDataLoading(false);
+      isRefreshingRef.current = false;
+      setIsSyncingSheets(false);
     }
   }, [triggerFeedback]);
 
@@ -1170,7 +1229,13 @@ export default function App() {
   useEffect(() => {
     const handlePatientsSyncEvent = (e: any) => {
       if (e.detail && Array.isArray(e.detail)) {
-        setPatients([...e.detail]);
+        const unique: Patient[] = deduplicatePatientList<Patient>(e.detail);
+        setPatients(prev => {
+          if (prev.length === unique.length && JSON.stringify(prev) === JSON.stringify(unique)) {
+            return prev;
+          }
+          return unique;
+        });
       }
     };
     const handleReturnToHome = (e: any) => {
@@ -1185,18 +1250,12 @@ export default function App() {
     };
   }, []);
 
-  // Fetch latest members, appointments and logs on launch (Google Sheets / Firestore)
+  // Initial load: prefer immediate local cache to prevent flashing or jumping, sync Google Sheets only if local storage is empty
   useEffect(() => {
-    handleRefreshPatientsFromGoogleSheets(false, false);
-
-    // Auto-refresh (real-time sync) silently when window regains focus
-    const handleFocus = () => {
-      // Only do silent background fetch if already authenticated to keep it updated
-      if (isAuthenticated) {
-        handleRefreshPatientsFromGoogleSheets(false, true);
-      }
-    };
-    window.addEventListener('focus', handleFocus);
+    const localPatientsStr = localStorage.getItem('growthlab_patients_master') || localStorage.getItem('growth_lab_patients');
+    if (!localPatientsStr || localPatientsStr === '[]' || localPatientsStr.trim() === '') {
+      handleRefreshPatientsFromGoogleSheets(false, true);
+    }
     
     cloudApi.getClinicConfig(getWebhookUrl()).then(res => {
       if (res && res.success && res.data) {
@@ -1224,6 +1283,7 @@ export default function App() {
                 'บุคลากร': true
               }
             }));
+            if (prev.length === mapped.length && JSON.stringify(prev) === JSON.stringify(mapped)) return prev;
             localStorage.setItem('growth_lab_staff_accounts', JSON.stringify(mapped));
             return mapped;
           });
@@ -1242,6 +1302,7 @@ export default function App() {
               doctorSpecialty: remoteConfig.doctorSpecialty || prev.doctorSpecialty,
               doctorTitlePosition: remoteConfig.doctorTitlePosition || prev.doctorTitlePosition,
             };
+            if (JSON.stringify(prev) === JSON.stringify(updated)) return prev;
             try {
               localStorage.setItem('growthlab_clinic_info', JSON.stringify(updated));
               localStorage.setItem('growth_lab_settings', JSON.stringify(updated));
@@ -1258,7 +1319,10 @@ export default function App() {
         const raw = localStorage.getItem('clinic_profile_data') || localStorage.getItem('growthlab_clinic_info') || localStorage.getItem('growth_lab_settings');
         if (raw) {
           const parsed = JSON.parse(raw);
-          setSettings(parsed);
+          setSettings(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
+            return parsed;
+          });
         }
       } catch (e) {}
     };
@@ -1277,7 +1341,10 @@ export default function App() {
           if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setPatients(parsed);
+              setPatients(prev => {
+                if (prev.length === parsed.length && JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
+                return parsed;
+              });
             }
           }
         } catch {}
@@ -1288,7 +1355,10 @@ export default function App() {
           if (raw) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
-              setAppointments(parsed);
+              setAppointments(prev => {
+                if (prev.length === parsed.length && JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
+                return parsed;
+              });
             }
           }
         } catch {}
@@ -1299,13 +1369,6 @@ export default function App() {
     window.addEventListener('clinic_profile_data_updated', handleClinicInfoUpdated);
     window.addEventListener('storage', handleStorageChange);
 
-    // Auto-poll silently every 12 seconds when authenticated
-    const pollInterval = setInterval(() => {
-      if (isAuthenticated) {
-        handleRefreshPatientsFromGoogleSheets(false, true);
-      }
-    }, 12000);
-
     let unsubMembers: any = null;
     let unsubApps: any = null;
     let unsubLogs: any = null;
@@ -1314,66 +1377,91 @@ export default function App() {
 
     if (isFirebaseConfigured) {
       dataAdapter.listAppointments().then(remoteApps => {
-        if (remoteApps) {
-          setAppointments(remoteApps);
+        if (remoteApps && Array.isArray(remoteApps)) {
+          setAppointments(prev => {
+            if (prev.length === remoteApps.length && JSON.stringify(prev) === JSON.stringify(remoteApps)) return prev;
+            return remoteApps;
+          });
         }
       }).catch(err => console.warn('[App] Initial Firestore appointments sync:', err));
 
       dataAdapter.listSessionLogs().then(remoteLogs => {
-        if (remoteLogs) {
-          setLogs(remoteLogs);
+        if (remoteLogs && Array.isArray(remoteLogs)) {
+          setLogs(prev => {
+            if (prev.length === remoteLogs.length && JSON.stringify(prev) === JSON.stringify(remoteLogs)) return prev;
+            return remoteLogs;
+          });
         }
       }).catch(err => console.warn('[App] Initial Firestore logs sync:', err));
 
       dataAdapter.getClinicSettings().then(remoteSettings => {
         if (remoteSettings) {
-          setSettings(remoteSettings);
+          setSettings(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(remoteSettings)) return prev;
+            return remoteSettings;
+          });
         }
       }).catch(err => console.warn('[App] Initial Firestore settings sync:', err));
 
       dataAdapter.listStaffAccounts().then(remoteStaff => {
         if (remoteStaff && remoteStaff.length > 0) {
-          setStaffAccounts(remoteStaff);
+          setStaffAccounts(prev => {
+            if (prev.length === remoteStaff.length && JSON.stringify(prev) === JSON.stringify(remoteStaff)) return prev;
+            return remoteStaff;
+          });
         }
       }).catch(err => console.warn('[App] Initial Firestore staff sync:', err));
 
       unsubMembers = dataAdapter.subscribeMembers(remoteMembers => {
         if (remoteMembers) {
-          setPatients(remoteMembers);
+          setPatients(prev => {
+            if (prev.length === remoteMembers.length && JSON.stringify(prev) === JSON.stringify(remoteMembers)) return prev;
+            return remoteMembers;
+          });
         }
       });
 
       unsubApps = dataAdapter.subscribeAppointments(remoteApps => {
         if (remoteApps) {
-          setAppointments(remoteApps);
+          setAppointments(prev => {
+            if (prev.length === remoteApps.length && JSON.stringify(prev) === JSON.stringify(remoteApps)) return prev;
+            return remoteApps;
+          });
         }
       });
 
       unsubLogs = dataAdapter.subscribeSessionLogs(remoteLogs => {
         if (remoteLogs) {
-          setLogs(remoteLogs);
+          setLogs(prev => {
+            if (prev.length === remoteLogs.length && JSON.stringify(prev) === JSON.stringify(remoteLogs)) return prev;
+            return remoteLogs;
+          });
         }
       });
 
       unsubSettings = dataAdapter.subscribeClinicSettings(remoteSettings => {
         if (remoteSettings) {
-          setSettings(remoteSettings);
+          setSettings(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(remoteSettings)) return prev;
+            return remoteSettings;
+          });
         }
       });
 
       unsubStaff = dataAdapter.subscribeStaffAccounts(remoteStaff => {
         if (remoteStaff && remoteStaff.length > 0) {
-          setStaffAccounts(remoteStaff);
+          setStaffAccounts(prev => {
+            if (prev.length === remoteStaff.length && JSON.stringify(prev) === JSON.stringify(remoteStaff)) return prev;
+            return remoteStaff;
+          });
         }
       });
     }
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
       window.removeEventListener('growthlab_clinic_info_updated', handleClinicInfoUpdated);
       window.removeEventListener('clinic_profile_data_updated', handleClinicInfoUpdated);
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(pollInterval);
       if (unsubMembers) unsubMembers();
       if (unsubApps) unsubApps();
       if (unsubLogs) unsubLogs();
@@ -1419,6 +1507,7 @@ export default function App() {
 
   const processedTokenRef = useRef<string | null>(null);
   const hasResolvedDeepLinkRef = useRef<boolean>(false);
+  const isResolvingDeepLinkRef = useRef<boolean>(false);
 
   // Helper to safely clean URL parameters after deep link resolution
   const cleanUrlQueryParams = () => {
@@ -1443,7 +1532,10 @@ export default function App() {
       
       if (matchedPatient) {
         // ล็อกเซสชันผู้ป่วยทันทีเพื่อป้องกันลูปการรีเฟรชหน้าจอซ้ำซ้อน
-        setAuthenticatedPatient(matchedPatient);
+        setAuthenticatedPatient(prev => {
+          if (prev?.id === matchedPatient.id && prev?.hn === matchedPatient.hn) return prev;
+          return matchedPatient;
+        });
         sessionStorage.setItem('growth_lab_active_patient_id', matchedPatient.id);
       }
     }
@@ -1451,7 +1543,7 @@ export default function App() {
 
   // Member Direct Access (Deep Link QR Code handling - One-Time Resolution)
   useEffect(() => {
-    if (hasResolvedDeepLinkRef.current) return;
+    if (hasResolvedDeepLinkRef.current || isResolvingDeepLinkRef.current) return;
     // Helper to extract hn and token from query parameter, hash, or pathname
     const extractPatientCredentials = (): { hn: string | null; token: string | null } => {
       if (typeof window === 'undefined') return { hn: null, token: null };
@@ -1471,8 +1563,10 @@ export default function App() {
       const token = getParamCaseInsensitive(window.location.search, ['token', 'member', 'qr']);
 
       if (hn) {
+        const rawHn = hn.trim();
+        const cleanHn = rawHn.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         return {
-          hn: hn.trim(),
+          hn: cleanHn || rawHn,
           token: token ? token.trim() : null
         };
       }
@@ -1484,7 +1578,9 @@ export default function App() {
         const h_hn = getParamCaseInsensitive(window.location.hash, ['hn']);
         const h_token = getParamCaseInsensitive(window.location.hash, ['token', 'member', 'qr']);
         if (h_hn) {
-           return { hn: h_hn.trim(), token: h_token ? h_token.trim() : null };
+          const rawHn = h_hn.trim();
+          const cleanHn = rawHn.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          return { hn: cleanHn || rawHn, token: h_token ? h_token.trim() : null };
         }
         if (h_token) return { hn: null, token: h_token.trim() };
       }
@@ -1551,26 +1647,31 @@ export default function App() {
     }
 
     // Flexible Match patient by HN first, then fallback to qrToken, id
+    const normalizeHn = (val?: string | null): string => {
+      if (!val) return '';
+      return String(val).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    };
+
     let foundPatient;
-    const cleanAuthKey = authKey.replace(/^(hn-)/i, '').replace(/[\s-]/g, '').toLowerCase();
+    const cleanAuthKey = normalizeHn(authKey);
     
     foundPatient = targetPatients.find(p => {
-      const pHn = p.hn ? p.hn.toLowerCase().replace(/^(hn-)/i, '').replace(/[\s-]/g, '') : '';
-      const pId = p.id ? p.id.toLowerCase().replace(/[\s-]/g, '') : '';
-      const pToken = p.qrToken ? p.qrToken.toLowerCase().replace(/[\s-]/g, '') : '';
+      const pHn = normalizeHn(p.hn);
+      const pId = normalizeHn(p.id);
+      const pToken = normalizeHn(p.qrToken);
       
-      return (pHn && pHn === cleanAuthKey) || 
-             (pId && pId === cleanAuthKey) || 
+      return (pHn && (pHn === cleanAuthKey || pHn.includes(cleanAuthKey) || cleanAuthKey.includes(pHn))) || 
+             (pId && (pId === cleanAuthKey || pId.includes(cleanAuthKey) || cleanAuthKey.includes(pId))) || 
              (pToken && pToken === cleanAuthKey);
     });
 
     if (!foundPatient) {
       // Partial fallback
       foundPatient = targetPatients.find(p => {
-        const pHn = p.hn ? p.hn.toLowerCase().replace(/^(hn-)/i, '').replace(/[\s-]/g, '') : '';
+        const pHn = normalizeHn(p.hn);
         const pPhone = p.phone ? p.phone.replace(/[^0-9]/g, '') : '';
         const pFirst = p.firstName ? p.firstName.toLowerCase().replace(/[\s-]/g, '') : '';
-        return (pHn && pHn.includes(cleanAuthKey)) || 
+        return (pHn && (pHn.includes(cleanAuthKey) || cleanAuthKey.includes(pHn))) || 
                (pPhone && pPhone.includes(cleanAuthKey)) ||
                (pFirst && pFirst.includes(cleanAuthKey));
       });
@@ -1593,8 +1694,9 @@ export default function App() {
       cleanUrlQueryParams();
     } else {
       // 1. Direct query to Google Sheets API
+      isResolvingDeepLinkRef.current = true;
       setIsInitialDataLoading(true);
-      fetchPatientByHnFromGoogleSheets(authKey).then(livePatient => {
+      fetchPatientByHnFromGoogleSheets(cleanAuthKey || authKey).then(livePatient => {
         if (livePatient && (livePatient.hn || livePatient.id)) {
           hasResolvedDeepLinkRef.current = true;
           processedTokenRef.current = authKey;
@@ -1602,7 +1704,7 @@ export default function App() {
             if (!prev.some(p => p.id === livePatient.id || p.hn === livePatient.hn)) {
               const merged = [livePatient, ...prev];
               savePatientToLocalStorage(livePatient);
-              return merged;
+              return deduplicatePatientList(merged);
             }
             return prev;
           });
@@ -1628,7 +1730,7 @@ export default function App() {
                 if (!prev.some(p => p.id === member.id)) {
                   const merged = [member, ...prev];
                   savePatientToLocalStorage(member);
-                  return merged;
+                  return deduplicatePatientList(merged);
                 }
                 return prev;
               });
@@ -1651,7 +1753,7 @@ export default function App() {
                 hasResolvedDeepLinkRef.current = true;
                 const autoPat = createAutoRegisteredPatient(authKey, urlPayload);
                 savePatientToLocalStorage(autoPat);
-                setPatients(prev => [autoPat, ...prev]);
+                setPatients(prev => deduplicatePatientList([autoPat, ...prev]));
                 authService.login('PATIENT', autoPat.id, autoPat.firstName, undefined, autoPat.hn);
                 if (userRole !== 'PATIENT') setUserRole('PATIENT');
                 if (!isAuthenticated) setIsAuthenticated(true);
@@ -1669,6 +1771,8 @@ export default function App() {
       }).catch(err => {
         console.warn('[App] Live Google Sheets fetch failed:', err);
       }).finally(() => {
+        hasResolvedDeepLinkRef.current = true;
+        isResolvingDeepLinkRef.current = false;
         setIsInitialDataLoading(false);
       });
     }
@@ -1700,11 +1804,6 @@ export default function App() {
       assignedTasks: assignedTaskIds,
       assignedExercises: assignedTaskIds 
     }).catch(e => console.warn('[App] Firestore/Google Sheets update assignments failed:', e));
-
-    if (updatedPatient) {
-      const webhookUrl = getWebhookUrl();
-      syncPatientToGoogleSheets(webhookUrl, updatedPatient).catch(e => console.warn('[App] Google Sheets patient sync failed:', e));
-    }
 
     triggerFeedback('มอบหมายแบบฝึกหัดและซิงค์ข้อมูลสำเร็จ', 'success');
   };
@@ -2302,12 +2401,10 @@ export default function App() {
     setAppointments(updatedAppointments);
     saveStateToLocal('growth_lab_appointments', updatedAppointments);
 
-    // Live Cloud Sync: Save to Google Sheets master endpoint
+    // Live Cloud Sync: Save to Google Sheets master endpoint via dataAdapter (prevents duplicate row submissions)
     try {
-      await savePatientToGoogleSheets(patientWithId, getWebhookUrl());
       await dataAdapter.createMember(patientWithId);
       dataAdapter.saveAppointments(updatedAppointments, autoAppointment).catch(e => console.warn('[App] Auto appointment sync error:', e));
-      syncAppointmentToGoogleSheets(getWebhookUrl(), autoAppointment).catch(e => console.warn('[App] Direct Google Sheets appointment sync error:', e));
     } catch (err) {
       console.warn('[App] Cloud sync error during registration:', err);
     }
@@ -2348,7 +2445,6 @@ export default function App() {
     saveStateToLocal('growth_lab_patients', updated);
 
     try {
-      await savePatientToGoogleSheets(updatedPatient, getWebhookUrl());
       await dataAdapter.updateMember(updatedPatient.id, updatedPatient);
     } catch (err) {
       console.warn('[App] Cloud sync error during edit:', err);
@@ -2472,21 +2568,38 @@ export default function App() {
     triggerFeedback('นัดหมายสำเร็จและเชื่อมต่อ Google Sheets เรียบร้อย', 'success');
   };
 
-  const handleUpdateAppointmentStatus = (id: string, status: string, notes?: string) => {
+  const handleUpdateAppointmentStatus = (id: string, status: string, notes?: string, fullAppt?: Appointment) => {
     let updatedApp: Appointment | undefined;
-    const updated = appointments.map((a) => {
-      if (a.id === id) {
-        updatedApp = { 
-          ...a, 
-          status: status as any,
-          ...(notes !== undefined ? { notes } : {})
-        };
-        return updatedApp;
-      }
-      return a;
-    });
+    const exists = appointments.some((a) => a.id === id);
+    let updated: Appointment[];
+    if (exists) {
+      updated = appointments.map((a) => {
+        if (a.id === id) {
+          updatedApp = { 
+            ...a, 
+            status: status as any,
+            ...(notes !== undefined ? { notes } : {})
+          };
+          return updatedApp;
+        }
+        return a;
+      });
+    } else if (fullAppt) {
+      updatedApp = {
+        ...fullAppt,
+        id,
+        status: status as any,
+        ...(notes !== undefined ? { notes } : {})
+      };
+      updated = [updatedApp, ...appointments];
+    } else {
+      updated = appointments;
+    }
     setAppointments(updated);
     saveStateToLocal('growth_lab_appointments', updated);
+    if (updatedApp) {
+      persistAppointmentLocally(updatedApp);
+    }
     dataAdapter.saveAppointments(updated, updatedApp).catch(e => console.warn('[App] Appointment update sync error:', e));
     triggerFeedback('อัปเดตสถานะนัดหมายสำเร็จ', 'success');
   };
@@ -2893,18 +3006,10 @@ export default function App() {
   const scopedAppointments = useMemo(() => {
     if (isPatient) {
       if (!assignedPatient) return [];
-      const pHn = (assignedPatient.hn || '').trim().toLowerCase();
-      const pId = (assignedPatient.id || '').trim().toLowerCase();
-      return appointments.filter(a => {
-        const aHn = ((a as any).hn || (a as any).HN || '').trim().toLowerCase();
-        const aPatId = (a.patientId || '').trim().toLowerCase();
-        const matchHn = pHn && (aHn === pHn || aPatId === pHn);
-        const matchId = pId && (aPatId === pId || aHn === pId);
-        return matchHn || matchId;
-      });
+      return resolvePatientAppointments(assignedPatient, appointments);
     }
     return appointments;
-  }, [isPatient, appointments, assignedPatient?.id, assignedPatient?.hn]);
+  }, [isPatient, appointments, assignedPatient]);
 
   const scopedPatients = useMemo(() => isPatient
     ? (assignedPatient ? [assignedPatient] : [])
@@ -3339,7 +3444,22 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3.5">
+            {!isPatient && (
+              <button
+                type="button"
+                id="header-btn-sync-sheets"
+                onClick={() => handleRefreshPatientsFromGoogleSheets(true)}
+                disabled={isSyncingSheets}
+                className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-200/80 transition-all cursor-pointer shadow-2xs disabled:opacity-60 shrink-0"
+                title="รีเฟรชข้อมูลสดตรงจาก Google Sheets (กดเมื่อต้องการอัปเดตข้อมูลด้วยมือ)"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                <span className="hidden md:inline">{isSyncingSheets ? 'กำลังซิงค์...' : 'รีเฟรชข้อมูล (Sync Sheets)'}</span>
+                <span className="md:hidden">{isSyncingSheets ? 'ซิงค์...' : 'Sync'}</span>
+              </button>
+            )}
+
             <button type="button" onClick={() => setActiveTab('การแจ้งเตือน')}
               className="relative p-2 text-slate-600 hover:text-purple-600 transition-colors cursor-pointer"
               title="การแจ้งเตือน"
@@ -3415,11 +3535,11 @@ export default function App() {
         >
           <AnimatePresence mode="wait">
             <motion.div
-              key={activeTab + (selectedPatientId || '') + (profileSubTab || '')}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
+              key={activeTab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
               className="w-full max-w-full flex-1 box-border overflow-x-hidden flex flex-col gap-4 sm:gap-6"
             >
           {activeTab === 'Dashboard' && !isPatient && (

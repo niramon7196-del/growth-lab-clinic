@@ -199,25 +199,10 @@ export default function SettingsPanel({
     }
   };
 
-  // Real-time synchronization lifecycle
+  // Fetch config and admins once on mount without noisy periodic polling or focus jitter
   useEffect(() => {
     fetchConfigAndAdminsFromSheets(false);
-
-    if (!autoSyncEnabled) return;
-    const interval = setInterval(() => {
-      fetchConfigAndAdminsFromSheets(false);
-    }, 45000);
-
-    const handleFocus = () => {
-      fetchConfigAndAdminsFromSheets(false);
-    };
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [autoSyncEnabled]);
+  }, []);
 
   /**
    * Real-time toggle administrator active/inactive status

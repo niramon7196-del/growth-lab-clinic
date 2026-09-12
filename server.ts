@@ -31,6 +31,92 @@ async function startServer() {
     });
   });
 
+  // Clean Single Fetch Endpoint for activity tracking (Check-in, Login, Exercise logs)
+  app.all("/api/track-activity", async (req, res) => {
+    try {
+      const now = new Date();
+      const bangkokDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+      const bangkokTimeStr = now.toLocaleTimeString('th-TH', { 
+        timeZone: 'Asia/Bangkok', 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+      });
+      const [hourStr] = bangkokTimeStr.split(':');
+      const isPast21PM = parseInt(hourStr, 10) >= 21;
+
+      if (req.method === 'GET') {
+        return res.status(200).json({
+          สถานะ: 'ปกติ (Active)',
+          วันที่ปัจจุบัน: bangkokDateStr,
+          เวลาปัจจุบัน: bangkokTimeStr,
+          ตัดรอบ3ทุ่มแล้ว: isPast21PM
+        });
+      }
+
+      const body = req.body || {};
+      const { type, patientId, hn, patientName, activity, metadata, timestamp } = body;
+      
+      const record = {
+        ประเภท: body.ประเภท || type || activity || 'เช็คอิน',
+        รหัสคนไข้: body.รหัสคนไข้ || patientId || hn || 'unknown',
+        รหัสประจำตัวHN: body.รหัสประจำตัวHN || hn || patientId || '',
+        ชื่อผู้รับการดูแล: body.ชื่อผู้รับการดูแล || patientName || '',
+        สถานะสำเร็จ: typeof body.สถานะสำเร็จ === 'boolean' ? body.สถานะสำเร็จ : (body.status === true || body.status === 'completed'),
+        คะแนนความสม่ำเสมอ: Number(body.คะแนนความสม่ำเสมอ ?? body.score ?? 100),
+        จำนวนแบบฝึกหัดที่ทำเสร็จ: Number(body.จำนวนแบบฝึกหัดที่ทำเสร็จ ?? metadata?.completedCount ?? 0),
+        จำนวนภารกิจทั้งหมด: Number(body.จำนวนภารกิจทั้งหมด ?? metadata?.totalTasks ?? 4),
+        ใส่อุปกรณ์EF: typeof body.ใส่อุปกรณ์EF === 'boolean' ? body.ใส่อุปกรณ์EF : Boolean(body.efWorn || metadata?.efWorn),
+        จำนวนชั่วโมงใส่EF: Number(body.จำนวนชั่วโมงใส่EF ?? metadata?.efDurationHours ?? 0),
+        วันที่: body.วันที่ || bangkokDateStr,
+        เวลา: body.เวลา || bangkokTimeStr,
+        หมายเหตุ: body.หมายเหตุ || metadata?.notes || '',
+        receivedAt: new Date().toISOString()
+      };
+
+      console.log(`[TrackActivity API] Activity: ${record.ประเภท} for HN: ${record.รหัสประจำตัวHN || 'N/A'} (Cut-off 21:00: ${isPast21PM})`);
+
+      // Forward to Google Apps Script if APPS_SCRIPT_URL configured
+      const appsScriptUrl = process.env.APPS_SCRIPT_URL;
+      if (appsScriptUrl) {
+        try {
+          fetch(appsScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'logDaily',
+              sheetName: 'Daily_Logs',
+              targetSheet: 'Daily_Logs',
+              timestamp: new Date().toISOString(),
+              HN: record.รหัสประจำตัวHN,
+              patientName: record.ชื่อผู้รับการดูแล,
+              date: record.วันที่,
+              time: record.เวลา,
+              type: record.ประเภท,
+              status: record.สถานะสำเร็จ ? 'สำเร็จ' : 'ยังไม่เสร็จ',
+              notes: record.หมายเหตุ,
+              payload: record
+            })
+          }).catch(e => console.warn('[TrackActivity API] Apps Script background forward error:', e));
+        } catch {}
+      }
+
+      return res.status(200).json({
+        สำเร็จ: true,
+        ข้อความ: 'บันทึกข้อมูลกิจกรรมเรียบร้อยแล้ว',
+        ข้อมูลกิจกรรม: record,
+        ตัดรอบ3ทุ่มแล้ว: isPast21PM
+      });
+    } catch (err: any) {
+      console.error('[TrackActivity API] Error processing activity track:', err);
+      return res.status(500).json({
+        สำเร็จ: false,
+        ข้อผิดพลาด: err?.message || 'Failed to track activity'
+      });
+    }
+  });
+
   const publicPath = path.join(process.cwd(), "public");
   if (fs.existsSync(publicPath)) {
     app.use(express.static(publicPath));

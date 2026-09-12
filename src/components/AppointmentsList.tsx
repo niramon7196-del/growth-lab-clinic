@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar, Clock, Plus, Trash2, CheckCircle2, XCircle, Search, FileText, Share2, ExternalLink, Loader2, CalendarPlus, Download, AlertCircle, X, Filter } from 'lucide-react';
 import { Appointment, Patient } from '../types';
 import EmptyState from './ui/EmptyState';
 import { useScrollLock } from '../utils';
 import { Logo } from './Logo';
-import { formatPatientDisplay } from '../utils/patientUtils';
+import { formatPatientDisplay, deduplicateAppointments } from '../utils/patientUtils';
 import { downloadAppointmentIcs, getGoogleCalendarWebUrl, saveLocalCalendarRecord } from '../utils/calendarExport';
 import {
   getGoogleCalendarConnectionStatus,
@@ -178,7 +178,11 @@ export default function AppointmentsList({
   };
 
   // Filters
-  const filteredAppointments = appointments.filter((app) => {
+  const safeAppointments = useMemo(() => {
+    return deduplicateAppointments(appointments);
+  }, [appointments]);
+
+  const filteredAppointments = safeAppointments.filter((app) => {
     const matchesSearch = app.patientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (app.notes || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || app.status === statusFilter;

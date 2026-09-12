@@ -15,7 +15,7 @@ import {
 
 export { dataRouter, routeAppointmentToGoogleSheets, formatAppointment9Columns, APPOINTMENT_COLUMNS, APPOINTMENT_SHEET_NAME };
 
-export const API_URL = 'https://script.google.com/macros/s/AKfycbwKBK8vNUYLH7sAdM9x_m9Eur8os8c1izD-61f6M2gvuUIKKQbIXwEQwbwFEFh4RT0/exec';
+export const API_URL = 'https://script.google.com/macros/s/AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc/exec';
 
 
 
@@ -66,6 +66,8 @@ export function getApiUrl(): string {
         const stored = urlCandidate.trim();
         // Auto-upgrade legacy endpoints to the production API_URL
         if (
+          !stored.includes('AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc') ||
+          stored.includes('AKfycbwKBK8vNUYLH7sAdM9x') ||
           stored.includes('AKfycbyjMhbe7q3-lQ-AW7KWr3490E1j-de8av3KTyB7v5KQB5NegU0BgCP-XBfwglNPD7dp') ||
           stored.includes('AKfycbyGAHfEkrgkIM5zRpK91VVfMRkWKE4m_nn66DJpavEm-ltTUoKEcaSO1_tUbSR9pqH9') ||
           stored.includes('AKfycbxQhjldcvNR3OPM27f1QN5SqIzqt1tWGTL') ||
@@ -181,8 +183,10 @@ export async function cloudPost<T = any>(
   customUrl?: string
 ): Promise<CloudApiResponse<T>> {
   const endpoint = customUrl || getApiUrl();
+  const targetSheet = payload.sheetName || payload.targetSheet || (action === 'savePatient' ? 'Patients' : undefined);
   const requestBody = {
     action,
+    ...(targetSheet ? { sheetName: targetSheet, targetSheet: targetSheet } : {}),
     payload,
     timestamp: new Date().toISOString(),
     ...payload
@@ -925,6 +929,7 @@ export function normalizePatientsList(rawList: any[]): Patient[] {
     }
   }
 
+  const seenKeys = new Set<string>();
   const result: Patient[] = [];
   for (let i = startIndex; i < rawList.length; i++) {
     const normalized = normalizePatientRecord(rawList[i], i, headerMap);
@@ -932,12 +937,14 @@ export function normalizePatientsList(rawList: any[]): Patient[] {
       const cleanDigits = (normalized.phone || '').replace(/\D/g, '');
       const cleanFirstName = (normalized.firstName || '').replace(/^(ด\.?ช\.?|ด\.?ญ\.?|เด็กชาย|เด็กหญิง|นาย|นางสาว|น\.?ส\.?|นาง|คุณ|น้อง)\s*/i, '').trim();
       const hasValidName = Boolean(cleanFirstName && cleanFirstName !== 'ไม่ระบุชื่อ' && cleanFirstName !== 'ผู้รับการดูแล' && !cleanFirstName.startsWith('คนไข้ ('));
-      const hasValidNickname = Boolean(normalized.nickname && normalized.nickname !== '-' && normalized.nickname !== 'ไม่ระบุ');
       const isPlaceholderOnly = !hasValidName;
 
-
       if (!isPlaceholderOnly) {
-        result.push(normalized);
+        const cleanKey = (normalized.hn || normalized.id).toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanKey && !seenKeys.has(cleanKey)) {
+          seenKeys.add(cleanKey);
+          result.push(normalized);
+        }
       }
     }
   }
@@ -1057,6 +1064,9 @@ export async function savePatient(
     assignedExercises: assignedTasks,
     assignments: patientData.assignments || [],
     qrToken: patientData.qrToken || `tok_${hn}_${hn.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+    sheetName: 'Patients',
+    targetSheet: 'Patients',
+    tab: 'Patients',
     lastUpdated: new Date().toISOString()
   };
 
@@ -1116,6 +1126,166 @@ export async function logDaily(
 
   // 2. Sync to Cloud
   return cloudPost('logDaily', payload, customUrl);
+}
+
+/**
+ * 2.1 dailyCheckIn: Daily Check-in & Visit Counter
+ * POST action: "dailyCheckIn"
+ * Payload: { action: "dailyCheckIn", hn, patientName }
+ * Returns: { status: "success", visitCount: number, message: string }
+ */
+export async function dailyCheckIn(
+  data: {
+    hn: string;
+    patientName: string;
+  },
+  customUrl?: string
+): Promise<{ success: boolean; visitCount?: number; message?: string; error?: any }> {
+  const targetUrl = customUrl || getApiUrl();
+  const normalizedHn = (data.hn || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const payload = {
+    action: 'dailyCheckIn',
+    hn: normalizedHn,
+    patientName: data.patientName || ''
+  };
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json && (json.status === 'success' || json.visitCount !== undefined)) {
+        return {
+          success: true,
+          visitCount: typeof json.visitCount === 'number' ? json.visitCount : (json.visitCount ? Number(json.visitCount) : 1),
+          message: json.message || 'Check-in recorded'
+        };
+      }
+    }
+  } catch (err: any) {
+    console.warn('[cloudApi] dailyCheckIn error:', err);
+  }
+  return { success: false };
+}
+
+/**
+ * 2.2 submitExercise: Submit exercise workout / homework
+ * POST action: "submitExercise"
+ * Payload: { action: "submitExercise", hn, patientName, exerciseId, exerciseTitle, durationSec, reps, score, satisfaction: "พอใจ" }
+ */
+export async function submitExercise(
+  data: {
+    hn: string;
+    patientName: string;
+    exerciseId: string;
+    exerciseTitle: string;
+    durationSec: number;
+    reps: number;
+    score: number;
+    satisfaction?: string;
+  },
+  customUrl?: string
+): Promise<{ success: boolean; message?: string; error?: any }> {
+  const targetUrl = customUrl || getApiUrl();
+  const normalizedHn = (data.hn || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const payload = {
+    action: 'submitExercise',
+    hn: normalizedHn,
+    patientName: data.patientName || '',
+    exerciseId: data.exerciseId || '',
+    exerciseTitle: data.exerciseTitle || '',
+    durationSec: Number(data.durationSec) || 0,
+    reps: Number(data.reps) || 0,
+    score: Number(data.score) || 100,
+    satisfaction: data.satisfaction || 'พอใจ'
+  };
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      return {
+        success: true,
+        message: json?.message || 'Exercise log saved'
+      };
+    }
+  } catch (err: any) {
+    console.warn('[cloudApi] submitExercise error:', err);
+  }
+  return { success: false };
+}
+
+/**
+ * 2.3 getAppointments: Fetch appointments (?action=getAppointments&hn=...)
+ * Fetches patient appointments from Google Sheets API with fallback to all appointments
+ */
+export async function getAppointments(
+  hn?: string,
+  customUrl?: string
+): Promise<any[]> {
+  const targetUrl = customUrl || getApiUrl();
+  const normalizedHn = hn ? hn.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+
+  // 1. Primary call: action: "getAppointments" with hn parameter
+  try {
+    const urlWithHn = new URL(targetUrl);
+    urlWithHn.searchParams.append('action', 'getAppointments');
+    if (normalizedHn) {
+      urlWithHn.searchParams.append('hn', normalizedHn);
+    }
+    urlWithHn.searchParams.append('t', Date.now().toString());
+
+    const res = await fetch(urlWithHn.toString());
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      const list = Array.isArray(data) ? data : (data?.data || data?.appointments || []);
+      if (list.length > 0) {
+        return list;
+      }
+    }
+  } catch (e) {
+    console.warn('[cloudApi] getAppointments with hn query failed, attempting all appointments fallback:', e);
+  }
+
+  // 2. Fallback: fetch all appointments and match client-side by normalized HN
+  try {
+    const urlAll = new URL(targetUrl);
+    urlAll.searchParams.append('action', 'getAppointments');
+    urlAll.searchParams.append('t', Date.now().toString());
+
+    const resAll = await fetch(urlAll.toString());
+    if (resAll.ok) {
+      const data = await resAll.json().catch(() => null);
+      const list = Array.isArray(data) ? data : (data?.data || data?.appointments || []);
+      if (normalizedHn && list.length > 0) {
+        const filtered = list.filter((item: any) => {
+          const itemHn = (item.HN || item.hn || item.patientId || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          return itemHn === normalizedHn || itemHn.includes(normalizedHn) || normalizedHn.includes(itemHn);
+        });
+        if (filtered.length > 0) {
+          return filtered;
+        }
+      }
+      return list;
+    }
+  } catch (e) {
+    console.warn('[cloudApi] getAppointments fallback error:', e);
+  }
+
+  return [];
 }
 
 /**
@@ -1225,7 +1395,60 @@ export async function logExerciseSession(
   };
 
   saveDailyLogLocal(payload);
+  // Send via trackActivity pipe asynchronously
+  trackActivity({
+    type: 'exercise',
+    patientId: payload.patientId,
+    hn: payload.hn,
+    patientName: payload.patientName,
+    activity: `exercise_${sessionData.exerciseId || 'session'}`,
+    metadata: payload
+  }).catch(() => {});
   return cloudPost('logDaily', payload, customUrl);
+}
+
+/**
+ * Clean Single Fetch Endpoint pipeline for tracking activity (check-in, login, exercise)
+ * Direct call without arbitrary DOM event listeners or loop handlers.
+ */
+export async function trackActivity(data: {
+  type: 'check_in' | 'login' | 'exercise' | 'view' | 'navigation' | string;
+  patientId?: string;
+  hn?: string;
+  patientName?: string;
+  activity?: string;
+  metadata?: Record<string, any>;
+  timestamp?: string;
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const payload = {
+      type: data.type,
+      patientId: data.patientId || data.hn || '',
+      hn: data.hn || data.patientId || '',
+      patientName: data.patientName || '',
+      activity: data.activity || data.type,
+      metadata: data.metadata || {},
+      timestamp: data.timestamp || new Date().toISOString()
+    };
+
+    const res = await fetch('/api/track-activity', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      return { success: false, error: `HTTP ${res.status}` };
+    }
+
+    const json = await res.json();
+    return { success: true, data: json };
+  } catch (err: any) {
+    // Silent fail-safe for tracking
+    return { success: false, error: err?.message || 'Network error' };
+  }
 }
 
 /**
@@ -1275,8 +1498,8 @@ export async function saveAppointment(
     return { success: true, data: routeResult.data, appointments: [payload] };
   }
 
-  // Fallback to cloudPost if needed
-  const primaryResult = await cloudPost('createAppointment', payload, customUrl);
+  // Fallback to cloudPost if needed with action: 'saveAppointment'
+  const primaryResult = await cloudPost('saveAppointment', payload, customUrl);
   if (!primaryResult.success && primaryResult.error) {
     console.warn('[cloudApi] Retrying saveAppointment with "appendRow"...');
     const fallbackResult = await cloudPost('appendRow', payload, customUrl);
@@ -1936,6 +2159,9 @@ export const cloudApi = {
   getPatients,
   savePatient,
   logDaily,
+  dailyCheckIn,
+  submitExercise,
+  getAppointments,
   saveExercise,
   saveAppointment,
   saveClinicConfig,
@@ -1944,6 +2170,7 @@ export const cloudApi = {
   updateAdminStatus,
   normalizeClinicConfigAndAdmins,
   verifyStaff,
+  trackActivity,
   flushOfflineQueue
 };
 

@@ -50,6 +50,8 @@ export default function PatientFormModal({
   const [isLocating, setIsLocating] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
   const [localSaving, setLocalSaving] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const lastSubmitTimestampRef = useRef(0);
   const effectiveSaving = isSaving || localSaving;
 
   // Form State
@@ -84,7 +86,14 @@ export default function PatientFormModal({
 
   // Initialize or reset form when modal opens or initialData changes
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      isSubmittingRef.current = false;
+      return;
+    }
+
+    isSubmittingRef.current = false;
+    lastSubmitTimestampRef.current = 0;
+    setLocalSaving(false);
 
     if (mode === 'edit' && initialData) {
       const birthAge = initialData.dob ? calculateAgeFromDob(initialData.dob) : 0;
@@ -232,7 +241,13 @@ export default function PatientFormModal({
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (effectiveSaving) return; // Prevent double submit
+
+    // 1. Immediate synchronous debounce and multi-click lock to prevent duplicate rows
+    const now = Date.now();
+    if (isSubmittingRef.current || effectiveSaving || (now - lastSubmitTimestampRef.current < 2500)) {
+      console.warn('[PatientFormModal] Duplicate submission prevented by debounce/lock guard.');
+      return;
+    }
 
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       alert('กรุณากรอกชื่อจริงและนามสกุลของผู้รับการดูแล');
@@ -243,7 +258,11 @@ export default function PatientFormModal({
       return;
     }
 
+    // 2. Lock immediately and activate saving state
+    isSubmittingRef.current = true;
+    lastSubmitTimestampRef.current = now;
     setLocalSaving(true);
+
     try {
       const birthAge = formData.dob ? calculateAgeFromDob(formData.dob) : 0;
       const effectiveAge = birthAge > 0 ? birthAge : (Number(formData.age) || 0);
@@ -280,39 +299,16 @@ export default function PatientFormModal({
         photoAfter: initialData?.photoAfter || '',
       };
 
-      // Live Sync to Google Sheets via cloudApi.postAction
-      try {
-        await cloudApi.postAction('savePatient', patientPayload);
-      } catch (err) {
-        console.warn('[PatientFormModal] Direct cloudApi.postAction savePatient warning:', err);
-      }
-
-      // Auto-Sync Appointment if backup date was provided
-      if (formData.firstAppointmentDate) {
-        try {
-          const autoAppt = {
-            id: `app_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            patientId: patientPayload.id || formData.hn.trim(),
-            patientName: `${cleanFirst} ${formData.lastName.trim()}`.trim() || formData.nickname.trim() || formData.hn.trim(),
-            hn: formData.hn.trim(),
-            date: formData.firstAppointmentDate,
-            time: formData.firstAppointmentTime || '09:00',
-            type: 'clinical',
-            notes: 'ตรวจติดตามความก้าวหน้า EF Line & OMT',
-            status: 'pending'
-          };
-          await syncAppointmentToGoogleSheets(getWebhookUrl(), autoAppt);
-        } catch (err) {
-          console.warn('[PatientFormModal] Auto appointment sync warning:', err);
-        }
-      }
-
       await onSave(patientPayload);
     } catch (err) {
       console.error('[PatientFormModal] Error saving patient:', err);
       alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง');
     } finally {
       setLocalSaving(false);
+      // Keep debounce lock active for 1.5 seconds to prevent double clicks during close transition
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 1500);
     }
   };
 
@@ -324,7 +320,7 @@ export default function PatientFormModal({
           className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
           style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
           onClick={(e) => {
-            if (e.target === e.currentTarget && !isSaving) {
+            if (e.target === e.currentTarget && !effectiveSaving) {
               onClose();
             }
           }}
@@ -369,8 +365,8 @@ export default function PatientFormModal({
                 id="patient-form-modal-close-btn"
                 type="button"
                 onClick={onClose}
-                disabled={isSaving}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                disabled={effectiveSaving}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="ปิดหน้าต่าง"
               >
                 <X className="w-4 h-4" />
@@ -827,7 +823,7 @@ export default function PatientFormModal({
                   type="button"
                   onClick={onClose}
                   disabled={effectiveSaving}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ยกเลิก / ปิด
                 </button>
@@ -835,12 +831,17 @@ export default function PatientFormModal({
                   id="patient-form-modal-submit-btn"
                   type="submit"
                   disabled={effectiveSaving}
-                  className="px-6 py-2.5 rounded-xl font-black text-xs sm:text-sm text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:opacity-60 disabled:cursor-not-allowed shadow-md shadow-purple-600/30 transition-all cursor-pointer flex items-center gap-2"
+                  aria-busy={effectiveSaving}
+                  className={`px-6 py-2.5 rounded-xl font-black text-xs sm:text-sm text-white transition-all flex items-center gap-2 select-none ${
+                    effectiveSaving
+                      ? 'bg-purple-400 opacity-75 cursor-not-allowed pointer-events-none shadow-none ring-2 ring-purple-300/40'
+                      : 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800 shadow-md shadow-purple-600/30 cursor-pointer'
+                  }`}
                 >
                   {effectiveSaving ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                      <span>⏳ กำลังบันทึกข้อมูลเข้า Google Sheets...</span>
+                      <span>⏳ กำลังบันทึกข้อมูล... ห้ามกดซ้ำ</span>
                     </>
                   ) : (
                     <>

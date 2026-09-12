@@ -89,37 +89,10 @@ export default function CheckInAnalyticsPanel({
     onRefreshRef.current = onRefresh;
   }, [onRefresh]);
 
-  // Real-time synchronization listeners & background polling for instant follow-up updates
+  // Real-time synchronization listeners (rely on manual sync button to prevent flashing/bouncing)
   useEffect(() => {
-    const handleSync = () => {
-      cloudApi.getDailyLogs().then(res => {
-        if (res.success && Array.isArray(res.logs) && res.logs.length > 0) {
-          setCloudLogs(res.logs);
-        }
-      });
-      // DO NOT call onRefresh here! It causes an infinite loop because 
-      // onRefresh triggers cloudApi.getPatients() which emits 'growthlab_patients_updated'
-      // which triggers this handleSync again.
-    };
-
-    window.addEventListener('growthlab_patients_updated', handleSync);
-    window.addEventListener('growthlab_checkin_updated', handleSync);
-    window.addEventListener('storage', handleSync);
-    window.addEventListener('focus', handleSync);
-
-    // Auto-poll silently every 8 seconds for live dashboard updates
-    const pollTimer = setInterval(() => {
-      handleSync();
-    }, 8000);
-
-    return () => {
-      window.removeEventListener('growthlab_patients_updated', handleSync);
-      window.removeEventListener('growthlab_checkin_updated', handleSync);
-      window.removeEventListener('storage', handleSync);
-      window.removeEventListener('focus', handleSync);
-      clearInterval(pollTimer);
-    };
-  }, []); // Remove onRefresh from dependencies to prevent interval reset loop
+    // Rely exclusively on handleManualRefresh to fetch from Google Sheets
+  }, []);
 
   const handleManualRefresh = useCallback(async () => {
     setIsRefreshing(true);

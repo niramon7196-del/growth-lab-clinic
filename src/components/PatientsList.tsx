@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -29,7 +29,7 @@ import {
 import { Patient, SessionLog } from '../types';
 import { cleanNameString, isTaskOrCodeString, formatPatientDisplayName, cleanPhoneString } from '../services/dataAdapter';
 import { cloudApi } from '../services/cloudApi';
-import { calculateAgeFromDob, getAgeGroup, getAgeGroupBadge, getSuggestedTitlePrefix, formatPatientDisplay, detectGenderFromPatientData } from '../utils/patientUtils';
+import { calculateAgeFromDob, getAgeGroup, getAgeGroupBadge, getSuggestedTitlePrefix, formatPatientDisplay, detectGenderFromPatientData, deduplicatePatientList } from '../utils/patientUtils';
 import { useScrollLock } from '../utils';
 import { generateQRDataURL, getParticipantDeepLink, createDownloadableQRCanvas } from '../utils/qrCodeGenerator';
 import { getPatientAssignedExercises } from '../../exerciseHelper';
@@ -462,25 +462,6 @@ export default function PatientsList({
     }
   }, [autoOpenAddModal]);
 
-  // Auto-Fetch fresh patients from Google Sheets on load
-  const hasAutoFetchedRef = useRef(false);
-  useEffect(() => {
-    if (hasAutoFetchedRef.current) return;
-    hasAutoFetchedRef.current = true;
-    const autoFetch = async () => {
-      try {
-        if (onRefreshPatients) {
-          await onRefreshPatients(false);
-        } else {
-          await cloudApi.getPatients();
-        }
-      } catch (err) {
-        console.warn('[PatientsList] Auto-fetch error:', err);
-      }
-    };
-    autoFetch();
-  }, [onRefreshPatients]);
-
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSyncGoogleSheets = async () => {
@@ -512,7 +493,9 @@ export default function PatientsList({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const safePatients = Array.isArray(patients) ? patients : [];
+  const safePatients = useMemo(() => {
+    return deduplicatePatientList(Array.isArray(patients) ? patients : []);
+  }, [patients]);
 
   const filteredPatients = safePatients.filter((p) => {
     if (!p) return false;
@@ -1448,6 +1431,10 @@ export default function PatientsList({
           setEditingPatientId(null);
         }}
         onSave={async (patientData) => {
+          if (isSaving) {
+            console.warn('[PatientsList] Save operation is already in progress. Ignoring duplicate call.');
+            return;
+          }
           setIsSaving(true);
           try {
             if (showAddModal) {

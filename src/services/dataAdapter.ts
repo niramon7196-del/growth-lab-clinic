@@ -49,7 +49,9 @@ import {
   PatientNameFormatted, 
   AgeGroupType, 
   AgeGroupBadgeInfo,
-  parseAndNormalizeDob
+  parseAndNormalizeDob,
+  deduplicateAppointments,
+  deduplicatePatientList
 } from '../utils/patientUtils';
 import { parseAndCleanAssignedTasks, sanitizeTaskCode } from '../utils/cleanTasks';
 
@@ -876,20 +878,28 @@ export const dataAdapter = {
           return pat;
         }
       } catch (err) {
-        console.warn('[dataAdapter.getMember] Firestore read failed, falling back to local storage:', err);
+        console.warn('[dataAdapter.getMember] Google Sheets patient lookup error:', err);
       }
     }
 
-    // 3. Local Storage Fallback
+    // 2. Local Storage Fallback
     const found = localList.find(p => p.id === idOrToken || p.qrToken === idOrToken || p.hn === idOrToken);
     return found || null;
   },
 
   /**
-   * List all members
+   * List all members (returns cached local storage by default unless forceRemote is requested)
+   * Exclusively syncs through Google Sheets Central Web App Endpoint (process.env.APPS_SCRIPT_URL)
    */
-  async listMembers(): Promise<Patient[]> {
-    // 1. Try Google Sheets Initial Data with strict 3.5-second timeout
+  async listMembers(forceRemote: boolean = false): Promise<Patient[]> {
+    if (!forceRemote) {
+      const localList = getLocalPatients();
+      if (localList && localList.length > 0) {
+        return localList;
+      }
+    }
+
+    // 1. Fetch Patient List exclusively from Google Sheets Web App Endpoint
     try {
       const initialDataPromise = fetchInitialDataFromGoogleSheets();
       const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
@@ -928,25 +938,6 @@ export const dataAdapter = {
       console.warn('[dataAdapter.listMembers] Google Sheets fetch warning:', e);
     }
 
-    if (isFirebaseConfigured && db) {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'patients'));
-        if (!querySnapshot.empty) {
-          const members = filterValidPatients(querySnapshot.docs.map(doc => doc.data()));
-          saveLocalPatients(members);
-          return members;
-        }
-        const memSnapshot = await getDocs(collection(db, 'members'));
-        if (!memSnapshot.empty) {
-          const members = filterValidPatients(memSnapshot.docs.map(doc => doc.data()));
-          saveLocalPatients(members);
-          return members;
-        }
-      } catch (err) {
-        console.warn('[dataAdapter.listMembers] Firestore list failed, falling back to local storage:', err);
-      }
-    }
-
     return getLocalPatients();
   },
 
@@ -954,12 +945,27 @@ export const dataAdapter = {
    * Create a new member
    */
   async createMember(patient: Patient): Promise<Patient> {
+    const local = getLocalPatients();
+    const existingIdx = local.findIndex(p => (p.hn && patient.hn && p.hn === patient.hn) || (p.id && patient.id && p.id === patient.id));
+
     const newMember: Patient = {
       ...patient,
       checkInHistory: patient.checkInHistory || [],
       assignments: patient.assignments || [],
       status: patient.status || 'active'
     };
+
+    // If patient with this HN or ID already exists, update instead of creating a duplicate row
+    if (existingIdx >= 0) {
+      local[existingIdx] = { ...local[existingIdx], ...newMember };
+      saveLocalPatients(local);
+      try {
+        await savePatientToGoogleSheets(local[existingIdx], getWebhookUrl());
+      } catch (e) {
+        console.warn('[dataAdapter.createMember] Google Sheets updatePatient error:', e);
+      }
+      return local[existingIdx];
+    }
 
     // 1. Save Live to Google Sheets First (action: 'savePatient')
     try {
@@ -969,13 +975,7 @@ export const dataAdapter = {
     }
 
     // 2. Save Local Cache
-    const local = getLocalPatients();
-    const existingIdx = local.findIndex(p => p.id === newMember.id || p.hn === newMember.hn);
-    if (existingIdx >= 0) {
-      local[existingIdx] = newMember;
-    } else {
-      local.unshift(newMember);
-    }
+    local.unshift(newMember);
     saveLocalPatients(local);
 
     // 3. Save Firestore (both patients/hn and members/id)
@@ -1217,9 +1217,6 @@ export const dataAdapter = {
         completedExercises: metrics.todayCompletedExercises || 0,
         complianceScore: metrics.consistencyPercent || 100
       }).catch(e => console.warn('[dataAdapter.createCheckIn] Google Sheets summary sync warning:', e));
-
-      // 4.3 Sync full patient history to Google Sheets
-      syncPatientToGoogleSheets(webhookUrl, patientForSync).catch(e => console.warn('[dataAdapter.createCheckIn] Google Sheets patient sync warning:', e));
     } catch (gsErr) {
       console.warn('[dataAdapter.createCheckIn] Google Sheets sync dispatch error:', gsErr);
     }
@@ -1474,7 +1471,21 @@ export const dataAdapter = {
   /**
    * Appointments management (Central Sync with Google Sheets & Firestore)
    */
-  async listAppointments(): Promise<Appointment[]> {
+  async listAppointments(forceRemote: boolean = false): Promise<Appointment[]> {
+    if (!forceRemote) {
+      try {
+        const raw = localStorage.getItem(LOCAL_STORAGE_APPS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     // 1. Try Google Sheets first for live appointment updates
     try {
       const gsApps = await fetchAppointmentsFromGoogleSheets();
@@ -1496,8 +1507,14 @@ export const dataAdapter = {
             mappedStatus = rawStatus;
           }
 
+          const rawHn = String(a.HN || a.hn || a.patientId || '').trim();
+          const cleanHn = rawHn.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          const cleanDate = String(a.Date || a.date || '').replace(/\D/g, '');
+          const cleanTime = String(a.Time || a.time || '').replace(/\D/g, '');
+          const fallbackDeterministicId = `appt_${cleanHn || 'pat'}_${cleanDate || 'date'}_${cleanTime || idx}`;
+
           return {
-            id: a.ID || a.id || a.appointmentId || `appt_${idx}_${Date.now()}`,
+            id: a.ID || a.id || a.appointmentId || fallbackDeterministicId,
             patientId: a.HN || a.hn || a.patientId || '',
             patientName: a.PatientName || a.patientName || a.name || 'ผู้รับการดูแล',
             hn: a.HN || a.hn || a.patientId || '',
@@ -1511,8 +1528,9 @@ export const dataAdapter = {
             googleCalendarHtmlLink: a.googleCalendarHtmlLink
           };
         });
-        localStorage.setItem(LOCAL_STORAGE_APPS_KEY, JSON.stringify(normalized));
-        return normalized;
+        const deduplicated = deduplicateAppointments(normalized);
+        localStorage.setItem(LOCAL_STORAGE_APPS_KEY, JSON.stringify(deduplicated));
+        return deduplicated;
       }
     } catch (e) {
       console.warn('[dataAdapter.listAppointments] Google Sheets fetch warning:', e);

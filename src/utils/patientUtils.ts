@@ -1144,4 +1144,63 @@ export function clearPersistentPatientSession(): void {
   }
 }
 
+/**
+ * Deduplicates a list of patients by unique normalized HN or ID,
+ * preserving complete records and preventing infinite data loops in tables.
+ */
+export function deduplicatePatientList<T extends Record<string, any> = Patient>(patients: T[]): T[] {
+  if (!Array.isArray(patients) || patients.length === 0) return [];
+  const seen = new Map<string, T>();
+
+  for (const p of patients) {
+    if (!p) continue;
+    const rawHn = String(p.hn || '').trim();
+    const rawId = String(p.id || '').trim();
+    const cleanKey = (rawHn || rawId).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleanKey) continue;
+
+    if (!seen.has(cleanKey)) {
+      seen.set(cleanKey, p);
+    } else {
+      const existing = seen.get(cleanKey)!;
+      const existingHist = Array.isArray(existing.checkInHistory) ? existing.checkInHistory.length : 0;
+      const newHist = Array.isArray(p.checkInHistory) ? p.checkInHistory.length : 0;
+      const existingTasks = Array.isArray(existing.assignments) ? existing.assignments.length : 0;
+      const newTasks = Array.isArray(p.assignments) ? p.assignments.length : 0;
+
+      if (newHist > existingHist || newTasks > existingTasks) {
+        seen.set(cleanKey, { ...existing, ...p } as T);
+      } else {
+        seen.set(cleanKey, { ...p, ...existing } as T);
+      }
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
+/**
+ * Deduplicates a list of appointments by unique ID and/or patient + date + time combination.
+ */
+export function deduplicateAppointments<T extends { id?: string; patientId?: string; patientHn?: string; hn?: string; date?: string; time?: string }>(appointments: T[]): T[] {
+  if (!Array.isArray(appointments) || appointments.length === 0) return [];
+  const seen = new Map<string, T>();
+
+  for (const a of appointments) {
+    if (!a) continue;
+    const idKey = a.id ? `id_${a.id}` : '';
+    const patKey = String(a.patientId || a.patientHn || a.hn || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const dateKey = String(a.date || '').replace(/\D/g, '');
+    const timeKey = String(a.time || '').replace(/\D/g, '');
+    const compositeKey = patKey && dateKey ? `comp_${patKey}_${dateKey}_${timeKey}` : '';
+    const primaryKey = idKey || compositeKey || `raw_${Math.random()}`;
+
+    if (!seen.has(primaryKey)) {
+      seen.set(primaryKey, a);
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
 

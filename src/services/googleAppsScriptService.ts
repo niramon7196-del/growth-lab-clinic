@@ -16,7 +16,7 @@ export { dataRouter, routeAppointmentToGoogleSheets, formatAppointment9Columns, 
  */
 
 // 1. Central API Endpoint for Google Apps Script Web App
-export const API_URL = 'https://script.google.com/macros/s/AKfycbwFdmRIkDUI9NiyjlPS0RP57qh3jrBXfPv2d6ADhMiFk_MPpp1lk7EcVd4b0hREBipP/exec';
+export const API_URL = 'https://script.google.com/macros/s/AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc/exec';
 export const CHECKIN_BASE_URL = API_URL;
 export const DEFAULT_WEBHOOK_URL = API_URL;
 
@@ -30,6 +30,9 @@ export function getWebhookUrl(): string {
         const stored = urlCandidate.trim();
         // If it still points to the old apps script url, migrate it to the current master API_URL
         if (
+          !stored.includes('AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc') ||
+          stored.includes('AKfycbwKBK8vNUYLH7sAdM9x') ||
+          stored.includes('AKfycbwFdmRIkDUI9NiyjlPS0RP57qh3jrBXfPv2d6ADhMiFk_MPpp1lk7EcVd4b0hREBipP') ||
           stored.includes('AKfycbyjMhbe7q3-lQ-AW7KWr3490E1j-de8av3KTyB7v5KQB5NegU0BgCP-XBfwglNPD7dp') ||
           stored.includes('AKfycbyGAHfEkrgkIM5zRpK91VVfMRkWKE4m_nn66DJpavEm-ltTUoKEcaSO1_tUbSR9pqH9') ||
           stored.includes('AKfycbxQhjldcvNR3OPM27f1QN5SqIzqt1tWGTL') ||
@@ -276,6 +279,25 @@ export async function fetchPatientByHnFromGoogleSheets(
   if (/^\d+$/.test(cleanQuery)) {
     const hnPrefixedResult = await tryFetch(`HN-${cleanQuery}`);
     if (hnPrefixedResult) return hnPrefixedResult;
+  }
+
+  // 4. Fallback: fetch all patients from API and find by normalized HN
+  try {
+    const allPatients = await fetchPatientsFromGoogleSheets(targetUrl);
+    if (allPatients && allPatients.length > 0) {
+      const normalizedQuery = cleanQuery.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const matched = allPatients.find((p: any) => {
+        const pHn = (p.hn || p.id || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const pPhone = (p.phone || '').toString().replace(/[^0-9]/g, '');
+        return (pHn && (pHn === normalizedQuery || pHn.includes(normalizedQuery) || normalizedQuery.includes(pHn))) ||
+               (pPhone && pPhone === cleanQuery.replace(/[^0-9]/g, ''));
+      });
+      if (matched) {
+        return normalizeApiPatient(matched);
+      }
+    }
+  } catch (err) {
+    console.warn('[googleAppsScriptService] Fallback all patients lookup error:', err);
   }
 
   return null;
@@ -1116,41 +1138,71 @@ export async function syncDeletePatientToGoogleSheets(
  * 15. Fetch Appointments from Google Sheets
  */
 export async function fetchAppointmentsFromGoogleSheets(
-  webhookUrl?: string
+  webhookUrl?: string,
+  hn?: string
 ): Promise<any[] | null> {
   const targetUrl = webhookUrl || getWebhookUrl();
   if (!targetUrl) return null;
 
+  const normalizedHn = hn ? hn.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+
   try {
     const url = new URL(targetUrl);
-    url.searchParams.append('action', 'GET_APPOINTMENTS');
-    url.searchParams.append('sheetName', 'Appointments');
-    url.searchParams.append('tab', 'Appointments');
+    url.searchParams.append('action', 'getAppointments');
+    if (normalizedHn) {
+      url.searchParams.append('hn', normalizedHn);
+    }
     url.searchParams.append('t', Date.now().toString());
 
     const res = await fetch(url.toString(), {
       method: 'GET'
     });
 
-    if (!res.ok) throw new Error('Failed response from Google Sheets for appointments');
-    const data = await res.json();
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      let appointmentsList: any[] = [];
+      if (Array.isArray(data)) {
+        appointmentsList = data;
+      } else if (data && Array.isArray(data.appointments)) {
+        appointmentsList = data.appointments;
+      } else if (data && Array.isArray(data.data)) {
+        appointmentsList = data.data;
+      }
 
-    let appointmentsList: any[] = [];
-    if (Array.isArray(data)) {
-      appointmentsList = data;
-    } else if (data && Array.isArray(data.appointments)) {
-      appointmentsList = data.appointments;
-    } else if (data && Array.isArray(data.data)) {
-      appointmentsList = data.data;
-    }
-
-    if (appointmentsList.length > 0) {
-      console.log(`[googleAppsScriptService] Fetched ${appointmentsList.length} fresh appointments from Google Sheets.`);
-      return appointmentsList;
+      if (appointmentsList.length > 0) {
+        console.log(`[googleAppsScriptService] Fetched ${appointmentsList.length} fresh appointments from Google Sheets.`);
+        return appointmentsList;
+      }
     }
   } catch (err) {
     console.warn('[googleAppsScriptService] Fetch appointments warning:', err);
   }
+
+  // Fallback: if hn query returned empty, try getting all appointments and filter locally
+  if (normalizedHn) {
+    try {
+      const fallbackUrl = new URL(targetUrl);
+      fallbackUrl.searchParams.append('action', 'getAppointments');
+      fallbackUrl.searchParams.append('t', Date.now().toString());
+      const resFallback = await fetch(fallbackUrl.toString());
+      if (resFallback.ok) {
+        const data = await resFallback.json().catch(() => null);
+        const list = Array.isArray(data) ? data : (data?.appointments || data?.data || []);
+        if (Array.isArray(list) && list.length > 0) {
+          const matched = list.filter((item: any) => {
+            const itemHn = (item.HN || item.hn || item.patientId || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return itemHn === normalizedHn || itemHn.includes(normalizedHn) || normalizedHn.includes(itemHn);
+          });
+          if (matched.length > 0) {
+            return matched;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[googleAppsScriptService] Fetch all appointments fallback warning:', e);
+    }
+  }
+
   return null;
 }
 

@@ -16,14 +16,15 @@ import {
   formatThaiTimestamp, 
   hasCheckedInToday, 
   getTodayCheckInRecord, 
-  calculateConsistencyMetrics 
+  calculateConsistencyMetrics,
+  syncPatientProgress
 } from '../utils/checkInCalculations';
 import { Logo } from './Logo';
 import { InceptionDossierModal } from './InceptionDossierModal';
 import { syncRealtimeCheckIn } from '../services/googleDriveSheetsService';
 import { savePatientToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
 import * as cloudApi from '../services/cloudApi';
-import { formatPatientDisplay } from '../utils/patientUtils';
+import { formatPatientDisplay, savePatientToLocalStorage } from '../utils/patientUtils';
 import { playSuccessChime } from '../utils/audioUtils';
 
 interface ParticipantCheckInPortalProps {
@@ -441,19 +442,32 @@ export default function ParticipantCheckInPortal({
         onSaveAllAssignments(patient.id, homeworkPayload);
       }
 
-      // 4. Direct save to Google Sheets API
-      const webhookUrl = getWebhookUrl();
-      const updatedPatientForSync = {
+      // 4. Update local state for the active patient
+      const updatedPatientForSync: Patient = {
         ...patient,
         assignments: homeworkPayload,
         assignedTasks: allTaskIds.filter(id => completedItems[id]),
-        progress: progressPercent,
         notes: `บันทึก 4 เสาหลัก (${completedCount}/${totalTasks}) วันที่ ${todayStr}`
       };
+      updatedPatientForSync.progress = syncPatientProgress(updatedPatientForSync);
+      savePatientToLocalStorage(updatedPatientForSync);
 
-      await savePatientToGoogleSheets(updatedPatientForSync, webhookUrl);
+      // 5. Track Check-in Activity via Single Fetch Pipeline
+      cloudApi.trackActivity({
+        type: 'check_in',
+        patientId: patient.id,
+        hn: activeHn,
+        patientName: activeName,
+        activity: '4_pillars_checkin',
+        metadata: {
+          progress: progressPercent,
+          completedCount,
+          totalTasks,
+          date: todayStr
+        }
+      }).catch(() => {});
 
-      // 5. Send structured Daily Log to Google Sheets (Daily_Logs)
+      // 5.1 Send structured Daily Log to Google Sheets (Daily_Logs)
       cloudApi.logDaily({
         hn: activeHn,
         name: activeName,

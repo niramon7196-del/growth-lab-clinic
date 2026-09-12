@@ -369,10 +369,17 @@ export default function PatientPortalEntry({ onLogin, onSwitchMode }: PatientPor
       localStorage.setItem('growth_lab_patient_active_tab', targetInitialTab);
       sessionStorage.setItem('growth_lab_selected_patient_id', matchedPatient.id);
 
-      // 8. Background synchronization (does not block user navigation)
+      // 8. Background login activity log (does not re-register patient to avoid duplicate rows in Patients sheet)
       try {
-        syncPatientToGoogleSheets(getWebhookUrl(), matchedPatient);
-        dataAdapter.createMember(matchedPatient).catch(() => {});
+        cloudApi.trackActivity({
+          type: 'login',
+          patientId: matchedPatient.id,
+          hn: patientHn,
+          patientName: patientName,
+          activity: 'patient_portal_login',
+          metadata: { method: 'phone_or_hn' }
+        }).catch(() => {});
+
         cloudApi.logDaily({
           hn: patientHn,
           patientId: matchedPatient.id,

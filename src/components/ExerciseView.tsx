@@ -291,7 +291,7 @@ export default function ExerciseView({
       }
     };
 
-    const midnightTimer = setInterval(checkDailyMidnightRollover, 15000);
+    const midnightTimer = setInterval(checkDailyMidnightRollover, 300000);
     return () => clearInterval(midnightTimer);
   }, [patientId, todayStr]);
 
@@ -811,7 +811,6 @@ export default function ExerciseView({
                               type="button"
                               onClick={() => {
                                 setSelectedExerciseId(ex.id);
-                                window.scrollTo({ top: 120, behavior: 'smooth' });
                               }}
                               className={`w-full py-2.5 px-4 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
                                 selectedExerciseId === ex.id

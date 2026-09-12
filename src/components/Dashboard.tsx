@@ -56,7 +56,7 @@ import { dataAdapter, cleanPhoneString } from '../services/dataAdapter';
 import { calculateConsistencyMetrics, getTodayDateString, formatThaiDate } from '../utils/checkInCalculations';
 import { VERIFIED_EXERCISES } from '../data';
 import PatientQRModal from './PatientQRModal';
-import { formatPatientDisplay } from '../utils/patientUtils';
+import { formatPatientDisplay, deduplicatePatientList } from '../utils/patientUtils';
 
 interface DashboardProps {
   patients: Patient[];
@@ -90,26 +90,6 @@ export default function Dashboard({
 }: DashboardProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [remoteSyncStatus, setRemoteSyncStatus] = useState<Record<string, any>>({});
-
-  const hasFetchedRef = useRef(false);
-
-  // Auto-Fetch patients from Google Sheets immediately on Dashboard Load
-  useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-    const autoFetchOnLoad = async () => {
-      try {
-        if (onRefreshPatients) {
-          await onRefreshPatients(false);
-        } else {
-          await dataAdapter.listMembers();
-        }
-      } catch (err) {
-        console.warn('[Dashboard] Auto-fetch on load error:', err);
-      }
-    };
-    autoFetchOnLoad();
-  }, [onRefreshPatients]);
 
   // Quick action modal states
   const [selectedQRModalPatient, setSelectedQRModalPatient] = useState<Patient | null>(null);
@@ -420,7 +400,7 @@ export default function Dashboard({
 
   // 5. Filtered & Sorted Patients for Executive Dashboard Table
   const dashFilteredPatients = useMemo(() => {
-    const safePatients = Array.isArray(patients) ? patients : [];
+    const safePatients = deduplicatePatientList(Array.isArray(patients) ? patients : []);
     
     return safePatients.filter((p) => {
       if (!p) return false;
@@ -816,10 +796,10 @@ export default function Dashboard({
             onClick={handleSyncRemoteHomework}
             disabled={isSyncing}
             className="px-3.5 py-2.5 bg-white/80 hover:bg-white text-indigo-950 font-bold text-xs rounded-xl border border-indigo-200/90 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 whitespace-nowrap min-h-[40px]"
-            title="รีเฟรชข้อมูลจาก Google Sheets"
+            title="รีเฟรชข้อมูลสดตรงจาก Google Sheets"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isSyncing ? 'animate-spin text-amber-500' : ''}`} />
-            <span>{isSyncing ? 'กำลังซิงค์...' : 'ซิงค์ Google Sheets'}</span>
+            <span>{isSyncing ? 'กำลังซิงค์...' : 'รีเฟรชข้อมูล (Sync Sheets)'}</span>
           </button>
 
           <button
