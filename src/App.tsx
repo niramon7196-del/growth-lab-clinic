@@ -664,18 +664,44 @@ export default function App() {
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     try {
+      // Clear stale mock appointments from localStorage on startup
+      const staleKeys = [
+        'growth_lab_appointments',
+        'growthlab_appointments',
+        'growthlab_appointments_master',
+        'growth_lab_appointments_master'
+      ];
+      staleKeys.forEach(k => {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.filter((a: any) => {
+                if (!a || typeof a !== 'object') return false;
+                if (a.id && (a.id.startsWith('appt_seed_') || a.id.startsWith('apt-') || a.id.startsWith('mock_') || a.id.startsWith('sample_'))) return false;
+                if (['2026-09-04', '2026-09-18', '2026-09-26'].includes(a.date) && String(a.id || '').includes('seed')) return false;
+                return true;
+              });
+              localStorage.setItem(k, JSON.stringify(cleaned));
+            }
+          } catch {
+            localStorage.removeItem(k);
+          }
+        }
+      });
+
       const local = localStorage.getItem('growth_lab_appointments');
       if (local) {
         const parsed = JSON.parse(local);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter(a => a && !a.id?.startsWith('apt-') && !a.id?.startsWith('appt_seed_') && !a.id?.startsWith('mock_') && !a.id?.startsWith('sample_'));
+        }
       }
     } catch (e) {
       console.warn('[App] Error reading initial appointments:', e);
     }
-    try {
-      localStorage.setItem('growth_lab_appointments', JSON.stringify(SEED_APPOINTMENTS));
-    } catch (e) { /* ignore */ }
-    return SEED_APPOINTMENTS;
+    return [];
   });
 
   const [notifications, setNotifications] = useState<SystemNotification[]>(() => {
@@ -1115,22 +1141,18 @@ export default function App() {
     }
 
     try {
-      // 1. Direct call to cloudApi.getPatients(), cloudApi.getDailyLogs(), and listAppointments
-      const [cloudRes, cloudLogsRes, apptsRes] = await Promise.all([
+      // 1. Direct call to cloudApi.getPatients(), cloudApi.getDailyLogs(), and cloudApi.getAppointments()
+      const [cloudRes, cloudLogsRes, liveApptsRes] = await Promise.all([
         cloudApi.getPatients(),
         cloudApi.getDailyLogs(),
-        dataAdapter.listAppointments(true).catch(() => null)
+        cloudApi.getAppointments().catch(() => null)
       ]);
 
-      if (apptsRes && Array.isArray(apptsRes) && apptsRes.length > 0) {
-        setAppointments(prev => {
-          const merged = deduplicateAppointments([...apptsRes, ...prev]);
-          if (prev.length === merged.length && JSON.stringify(prev) === JSON.stringify(merged)) {
-            return prev;
-          }
-          saveStateToLocal('growth_lab_appointments', merged);
-          return merged;
-        });
+      if (liveApptsRes && Array.isArray(liveApptsRes)) {
+        const clean = liveApptsRes.filter(a => a && !a.id?.startsWith('appt_seed_') && !a.id?.startsWith('apt-') && !a.id?.startsWith('mock_') && !a.id?.startsWith('sample_'));
+        const deduplicated = deduplicateAppointments(clean);
+        setAppointments(deduplicated);
+        saveStateToLocal('growth_lab_appointments', deduplicated);
       }
 
       if (cloudLogsRes && Array.isArray(cloudLogsRes)) {
@@ -2534,16 +2556,46 @@ export default function App() {
     triggerFeedback('บันทึกสำเร็จ', 'success');
   };
 
-  const handleDeleteLog = (logId: string) => {
+  const handleDeleteLog = async (logId: string) => {
     const updated = logs.filter((l) => l.id !== logId);
     setLogs(updated);
     saveStateToLocal('growth_lab_logs', updated);
     dataAdapter.saveSessionLogs(updated).catch(e => console.warn('[App] Firestore log sync error:', e));
+
+    try {
+      await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          action: "delete",
+          sheetName: "Daily_Logs",
+          id: logId
+        })
+      });
+    } catch (err) {
+      console.warn('[App] Failed to send delete log request:', err);
+    }
   };
 
   // Appointments Actions
   const handleAddAppointment = (newApp: Omit<Appointment, 'id' | 'patientName'>) => {
     const pat = patients.find((p) => p.id === newApp.patientId);
+    const patHn = pat?.hn || (newApp as any).hn;
+    
+    // Check duplicate booking: same patient on the same date and time
+    const isDuplicate = appointments.some(a => {
+      if (a.status === 'cancelled') return false;
+      const samePatient = a.patientId === newApp.patientId || (patHn && a.hn && a.hn.toLowerCase() === patHn.toLowerCase());
+      return samePatient && a.date === newApp.date && a.time === newApp.time;
+    });
+
+    if (isDuplicate) {
+      window.alert("ช่วงเวลานี้มีนัดหมายอยู่แล้ว กรุณาเลือกวันหรือเวลาอื่น");
+      return;
+    }
+
     const patName = pat ? `${pat.firstName} ${pat.lastName}` : 'ผู้รับการดูแลรายใหม่';
     const createdApp: Appointment = { 
       ...newApp, 
@@ -2561,7 +2613,7 @@ export default function App() {
     if (newApp.patientId) {
       handleAddNotification({
         title: '🗓️ นัดหมายใหม่ / อัปเดตตารางนัด',
-        message: `คุณมีนัดหมายใหม่: ${newApp.type} วันที่ ${new Date(newApp.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} เวลา ${newApp.time} น.`,
+        message: `คุณมีนัดหมายใหม่: ${newApp.type} วันที่ ${formatThaiDate(newApp.date, { longMonth: true, showYear: true })} เวลา ${newApp.time} น.`,
         type: 'info',
         patientId: newApp.patientId
       });
@@ -2607,6 +2659,18 @@ export default function App() {
   };
 
   const handleUpdateAppointment = (updatedAppt: Appointment) => {
+    // Prevent duplicate appointment collision on edit
+    const isDuplicate = appointments.some(a => {
+      if (a.id === updatedAppt.id || a.status === 'cancelled') return false;
+      const samePatient = a.patientId === updatedAppt.patientId || (updatedAppt.hn && a.hn && a.hn.toLowerCase() === updatedAppt.hn.toLowerCase());
+      return samePatient && a.date === updatedAppt.date && a.time === updatedAppt.time;
+    });
+
+    if (isDuplicate) {
+      window.alert("ช่วงเวลานี้มีนัดหมายอยู่แล้ว กรุณาเลือกวันหรือเวลาอื่น");
+      return;
+    }
+
     const updated = appointments.map((a) => (a.id === updatedAppt.id ? updatedAppt : a));
     setAppointments(updated);
     saveStateToLocal('growth_lab_appointments', updated);
@@ -2614,14 +2678,30 @@ export default function App() {
     triggerFeedback('อัปเดตข้อมูลนัดหมายสำเร็จ', 'success');
   };
 
-  const handleDeleteAppointment = (id: string) => {
+  const handleDeleteAppointment = async (id: string) => {
     const targetAppt = appointments.find(a => a.id === id);
     const updated = appointments.filter((a) => a.id !== id);
     setAppointments(updated);
     saveStateToLocal('growth_lab_appointments', updated);
     dataAdapter.deleteAppointment(id).catch(e => console.warn('[App] Appointment delete sync error:', e));
-    syncDeleteAppointmentToGoogleSheets(getWebhookUrl(), id, targetAppt?.patientId, targetAppt?.hn, targetAppt?.date).catch(e => console.warn('[App] Google Sheets appointment delete sync error:', e));
-    triggerFeedback('ลบรายการนัดหมายสำเร็จ และซิงก์คำสั่งลบไปยัง Google Sheet เรียบร้อย 🗑️', 'success');
+    
+    const appointmentId = (targetAppt as any)?.appointment_id || id;
+    try {
+      await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          action: "deleteAppointment",
+          sheetName: "Appointments",
+          id: appointmentId
+        })
+      });
+    } catch (err) {
+      console.warn('[App] Failed to send delete appointment request:', err);
+    }
+    triggerFeedback('ยกเลิกนัดหมายเรียบร้อยแล้ว', 'success');
   };
 
   // Notifications Actions

@@ -9,6 +9,8 @@ import {
   Maximize2, ExternalLink, Sparkles, Copy, Check, Eye
 } from 'lucide-react';
 import { UserRole } from '../types';
+import { saveClinicConfigToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
+import { cloudApi } from '../services/cloudApi';
 
 export interface VideoContent {
   id: string;
@@ -293,8 +295,9 @@ const getCategoryIcon = (iconName?: string, catId?: string) => {
 };
 
 export const parseEmbedInfo = (vid?: VideoContent) => {
-  if (!vid) return { isDirectVideo: false, url: 'https://www.youtube.com/embed/Pyi350fPC5c' };
+  if (!vid) return { isDirectVideo: false, url: '' };
   const source = (vid.videoUrl || vid.youtubeId || '').trim();
+  if (!source) return { isDirectVideo: false, url: '' };
 
   if (
     source.startsWith('blob:') || 
@@ -318,7 +321,7 @@ export const parseEmbedInfo = (vid?: VideoContent) => {
     return { isDirectVideo: false, url: source };
   }
 
-  return { isDirectVideo: false, url: `https://www.youtube.com/embed/${source}` };
+  return { isDirectVideo: false, url: source };
 };
 
 interface MediaLibraryHubProps {
@@ -344,12 +347,12 @@ export const MediaLibraryHub: React.FC<MediaLibraryHubProps> = ({ userRole, onNa
       const saved = localStorage.getItem(MEDIA_LIBRARY_CUSTOM_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
       const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
       if (legacy) {
         const parsedLegacy = JSON.parse(legacy);
-        if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) return parsedLegacy;
+        if (Array.isArray(parsedLegacy)) return parsedLegacy;
       }
     } catch (e) {
       console.warn('Failed to load media categories from localStorage', e);
@@ -402,20 +405,54 @@ export const MediaLibraryHub: React.FC<MediaLibraryHubProps> = ({ userRole, onNa
     };
   }, []);
 
-  // Save categories to LocalStorage
+  // Save categories to LocalStorage and Cloud
   const saveCategories = (updatedCategories: VideoCategory[]) => {
     setCategories(updatedCategories);
     try {
       localStorage.setItem(MEDIA_LIBRARY_CUSTOM_STORAGE_KEY, JSON.stringify(updatedCategories));
       localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(updatedCategories));
       window.dispatchEvent(new CustomEvent('growthlab_media_library_updated', { detail: updatedCategories }));
+
+      // Synchronize to Google Sheets & Cloud Config
+      const webhookUrl = getWebhookUrl();
+      if (webhookUrl) {
+        saveClinicConfigToGoogleSheets(webhookUrl, {
+          action: 'SAVE_MEDIA_CATEGORIES',
+          sheetName: 'Media_Library',
+          mediaCategories: updatedCategories,
+          timestamp: new Date().toISOString()
+        }).catch(err => console.warn('[MediaLibraryHub] Google Sheets sync error:', err));
+      }
+
+      cloudApi.saveClinicConfig({
+        action: 'SAVE_MEDIA_CATEGORIES',
+        sheetName: 'Media_Library',
+        mediaCategories: updatedCategories
+      }).catch(err => console.warn('[MediaLibraryHub] cloudApi sync error:', err));
     } catch (e) {
       console.warn('Failed to save media categories to localStorage', e);
     }
   };
 
-  const activeCategory = categories.find(c => c.id === activeCategoryId) || categories[0] || DEFAULT_CATEGORIES[0];
-  const activeVideo = activeCategory?.videos?.find(v => v.id === activeVideoId) || activeCategory?.videos?.[0] || DEFAULT_CATEGORIES[0].videos[0];
+  // Synchronize on mount from remote cloud/sheets if localStorage is empty
+  useEffect(() => {
+    const saved = localStorage.getItem(MEDIA_LIBRARY_CUSTOM_STORAGE_KEY);
+    if (!saved) {
+      cloudApi.getClinicConfig(getWebhookUrl()).then(res => {
+        if (res && res.success && res.data) {
+          const configData = res.data as any;
+          const remoteCats = configData?.mediaCategories || configData?.payload?.mediaCategories;
+          if (Array.isArray(remoteCats) && remoteCats.length > 0) {
+            setCategories(remoteCats);
+            localStorage.setItem(MEDIA_LIBRARY_CUSTOM_STORAGE_KEY, JSON.stringify(remoteCats));
+          }
+        }
+      }).catch(err => console.warn('[MediaLibraryHub] Cloud fetch error:', err));
+    }
+  }, []);
+
+  const activeCategory = categories.find(c => c.id === activeCategoryId) || categories[0];
+  const activeVideo = activeCategory?.videos?.find(v => v.id === activeVideoId) || activeCategory?.videos?.[0];
 
   // Open Modal for Add
   const handleOpenAddModal = () => {
@@ -748,23 +785,33 @@ export const MediaLibraryHub: React.FC<MediaLibraryHubProps> = ({ userRole, onNa
                       )}
                     </div>
                     <div className="aspect-video w-full rounded-2xl overflow-hidden bg-slate-900 relative shadow-inner flex items-center justify-center">
-                      {embedInfo.isDirectVideo ? (
-                        <video
-                          src={embedInfo.url}
-                          controls
-                          controlsList="nodownload"
-                          className="w-full h-full object-contain bg-black"
-                        >
-                          บราวเซอร์ของคุณไม่รองรับการเล่นวิดีโอนี้
-                        </video>
+                      {embedInfo.url ? (
+                        embedInfo.isDirectVideo ? (
+                          <video
+                            src={embedInfo.url}
+                            controls
+                            controlsList="nodownload"
+                            className="w-full h-full object-contain bg-black"
+                          >
+                            บราวเซอร์ของคุณไม่รองรับการเล่นวิดีโอนี้
+                          </video>
+                        ) : (
+                          <iframe
+                            src={embedInfo.url}
+                            title={activeVideo.title}
+                            className="absolute inset-0 w-full h-full border-0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        )
                       ) : (
-                        <iframe
-                          src={embedInfo.url}
-                          title={activeVideo.title}
-                          className="absolute inset-0 w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
+                        <div className="text-center p-6 text-slate-400 space-y-2">
+                          <Video className="w-10 h-10 mx-auto text-slate-600 mb-1" />
+                          <p className="text-xs font-bold text-slate-300">ยังไม่มีลิงก์วิดีโอสาธิต</p>
+                          <p className="text-[11px] text-slate-400">
+                            สามารถกดปุ่ม "แก้ไขข้อมูลสื่อ" เพื่อระบุลิงก์ YouTube, Drive หรือไฟล์วิดีโอได้
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -948,6 +995,8 @@ export const MediaLibraryHub: React.FC<MediaLibraryHubProps> = ({ userRole, onNa
                       setActiveCategoryId(cat.id);
                       if (cat.videos && cat.videos.length > 0) {
                         setActiveVideoId(cat.videos[0].id);
+                      } else {
+                        setActiveVideoId('');
                       }
                     }}
                     className={`flex items-center gap-3 px-4 py-3.5 text-left transition-all shrink-0 lg:shrink whitespace-nowrap lg:whitespace-normal border-b lg:border-b-0 lg:border-l-4 last:border-b-0 cursor-pointer min-h-[48px]

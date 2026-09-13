@@ -1188,13 +1188,17 @@ export async function syncDeletePatientToGoogleSheets(
 
   try {
     const payloadData = {
-      action: 'DELETE_PATIENT',
-      actionName: 'ลบข้อมูลผู้รับการดูแล (Delete Patient)',
-      timestamp: new Date().toISOString(),
+      action: 'delete',
+      sheetName: 'Patients',
+      hn: hn || patientId,
       patientId: patientId,
       id: patientId,
-      hn: hn || patientId,
+      altAction: 'DELETE_PATIENT',
+      actionName: 'ลบข้อมูลผู้รับการดูแล (Delete Patient)',
+      timestamp: new Date().toISOString(),
       payload: { 
+        action: 'delete',
+        sheetName: 'Patients',
         patientId, 
         id: patientId, 
         hn: hn || patientId 
@@ -1252,7 +1256,7 @@ export async function fetchAppointmentsFromGoogleSheets(
         appointmentsList = data.data;
       }
 
-      if (appointmentsList.length > 0) {
+      if (data !== null && (Array.isArray(data) || Array.isArray(data?.appointments) || Array.isArray(data?.data))) {
         console.log(`[googleAppsScriptService] Fetched ${appointmentsList.length} fresh appointments from Google Sheets.`);
         return appointmentsList;
       }

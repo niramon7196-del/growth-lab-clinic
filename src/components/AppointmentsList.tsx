@@ -16,6 +16,7 @@ import {
 import InteractiveCalendar from './InteractiveCalendar';
 import { playSuccessChime, playAlertTone } from '../utils/audioUtils';
 import { syncAppointmentToGoogleSheets, syncDeleteAppointmentToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
+import { formatThaiDate, formatAppointmentTime } from '../utils/checkInCalculations';
 
 export function getCleanPatientDisplayName(name: any): string {
   if (!name) return 'ผู้รับการดูแล';
@@ -57,6 +58,10 @@ export function getCleanNotes(notes: any): string {
     }
   }
   return clean;
+}
+
+export function formatDisplayTime(rawTime: any): string {
+  return formatAppointmentTime(rawTime);
 }
 
 interface AppointmentsListProps {
@@ -108,9 +113,9 @@ export default function AppointmentsList({
   // Form State
   const [formPatientId, setFormPatientId] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formTime, setFormTime] = useState('10:00');
+  const [formTime, setFormTime] = useState('10:30');
   const [formType, setFormType] = useState('ตรวจติดตาม EF Trainer');
-  const [formDentistName, setFormDentistName] = useState('ทพญ. นภาพร วรรณษา');
+  const [formDentistName, setFormDentistName] = useState('ทันตแพทย์หญิง นภาพร วรรณษา');
   const [formNotes, setFormNotes] = useState('');
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
@@ -271,6 +276,20 @@ export default function AppointmentsList({
     }
 
     const selectedPatient = patients.find(p => p.id === formPatientId);
+    const patHn = selectedPatient?.hn;
+
+    // Check duplicate booking: same patient on the same date and time
+    const isDuplicate = appointments.some(a => {
+      if (a.status === 'cancelled') return false;
+      const samePatient = a.patientId === formPatientId || (patHn && a.hn && a.hn.toLowerCase() === patHn.toLowerCase());
+      return samePatient && a.date === formDate && a.time === formTime;
+    });
+
+    if (isDuplicate) {
+      window.alert("ช่วงเวลานี้มีนัดหมายอยู่แล้ว กรุณาเลือกวันหรือเวลาอื่น");
+      return;
+    }
+
     const patName = selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : 'ผู้รับการดูแล';
 
     setIsSubmitting(true);
@@ -334,9 +353,9 @@ export default function AppointmentsList({
     // Reset Form
     setFormPatientId('');
     setFormDate(new Date().toISOString().split('T')[0]);
-    setFormTime('10:00');
+    setFormTime('10:30');
     setFormType('ตรวจติดตาม EF Trainer');
-    setFormDentistName('ทพญ. นภาพร วรรณษา');
+    setFormDentistName('ทันตแพทย์หญิง นภาพร วรรณษา');
     setFormNotes('');
   };
 
@@ -356,6 +375,8 @@ export default function AppointmentsList({
   const handleDeleteConfirm = async () => {
     if (apptToDelete) {
       const deletedName = apptToDelete.patientName;
+      const appointmentId = (apptToDelete as any).appointment_id || apptToDelete.id;
+      
       if (apptToDelete.googleCalendarEventId) {
         try {
           await deleteOrCancelGoogleCalendarEvent(apptToDelete.googleCalendarEventId, 'delete');
@@ -363,11 +384,23 @@ export default function AppointmentsList({
           console.warn('[AppointmentsList] Google Calendar delete warning:', err);
         }
       }
+
       try {
-        await syncDeleteAppointmentToGoogleSheets(getWebhookUrl(), apptToDelete.id, apptToDelete.patientId, apptToDelete.hn, apptToDelete.date);
+        await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify({
+            action: "deleteAppointment",
+            sheetName: "Appointments",
+            id: appointmentId
+          })
+        });
       } catch (err) {
         console.warn('[AppointmentsList] Google Sheets appointment delete sync error:', err);
       }
+
       onDeleteAppointment(apptToDelete.id);
       showToast(`ลบรายการนัดหมายของ ${deletedName} สำเร็จ และซิงก์คำสั่งลบไปยัง Google Calendar เรียบร้อย 🗑️`, 'success');
       setApptToDelete(null);
@@ -455,6 +488,7 @@ export default function AppointmentsList({
           }}
           onUpdateAppointmentStatus={onUpdateAppointmentStatus}
           onUpdateAppointment={onUpdateAppointment}
+          onDeleteAppointment={onDeleteAppointment}
         />
       </div>
 
@@ -646,7 +680,7 @@ export default function AppointmentsList({
                 <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-500 font-mono mt-3 pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-brand" />
-                    <span>{new Date(app.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span>
+                    <span>{formatThaiDate(app.date)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 justify-end">
                     <Clock className="w-4 h-4 text-brand" />
@@ -684,12 +718,41 @@ export default function AppointmentsList({
                   {/* Delete Trash Button on Bottom Left */}
                   <button
                     type="button"
-                    onClick={() => setApptToDelete(app)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200/60 hover:border-rose-200 cursor-pointer flex items-center justify-center"
-                    title="ลบรายการนัดหมายนี้"
-                    aria-label="ลบรายการนัดหมาย"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (window.confirm("ต้องการยกเลิกนัดหมายนี้ใช่หรือไม่?")) {
+                        const appointmentId = (app as any).appointment_id || app.id;
+                        
+                        try {
+                          await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "text/plain;charset=utf-8"
+                            },
+                            body: JSON.stringify({
+                              action: "deleteAppointment",
+                              sheetName: "Appointments",
+                              id: appointmentId
+                            })
+                          });
+                        } catch (err) {
+                          console.warn('[AppointmentsList] Delete sync error:', err);
+                        }
+
+                        onDeleteAppointment(app.id);
+                        if (app.googleCalendarEventId) {
+                          deleteOrCancelGoogleCalendarEvent(app.googleCalendarEventId, 'delete').catch(err => console.warn(err));
+                        }
+                        showToast(`ยกเลิกนัดหมายของ ${getCleanPatientDisplayName(app.patientName)} เรียบร้อยแล้ว`, 'success');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 rounded-lg transition-colors border border-rose-200 text-xs font-bold cursor-pointer shadow-2xs"
+                    title="ยกเลิกนัดหมายนี้"
+                    aria-label="ยกเลิกนัดหมาย"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600 pointer-events-none" />
+                    <span className="pointer-events-none">ยกเลิกนัด</span>
                   </button>
 
                   {/* Google Calendar Live Sync & Web Open Button */}
@@ -788,7 +851,7 @@ export default function AppointmentsList({
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               <p className="text-xs text-slate-600 leading-relaxed">
-                คุณแน่ใจหรือไม่ว่าต้องการลบนัดหมายของ <strong className="text-slate-800 font-semibold">{getCleanPatientDisplayName(apptToDelete.patientName)}</strong> วันที่ {new Date(apptToDelete.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} เวลา {apptToDelete.time} น. ออกจากระบบ?
+                คุณแน่ใจหรือไม่ว่าต้องการลบนัดหมายของ <strong className="text-slate-800 font-semibold">{getCleanPatientDisplayName(apptToDelete.patientName)}</strong> วันที่ {formatThaiDate(apptToDelete.date)} เวลา {apptToDelete.time} น. ออกจากระบบ?
               </p>
               <div className="p-2.5 bg-rose-50/80 border border-rose-100 rounded-xl text-[11px] text-rose-700 text-left flex items-start gap-2">
                 <span className="shrink-0 font-bold">⚠️</span>

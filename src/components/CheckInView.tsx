@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, Clock, Calendar, ArrowRight, Activity, Award, Sparkles, History, QrCode, Smartphone, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Clock, Calendar, ArrowRight, Activity, Award, Sparkles, History, QrCode, Smartphone, RefreshCw, Trash2 } from 'lucide-react';
 import { Patient, CheckInRecord } from '../types';
 import { 
   getTodayDateString, 
@@ -64,6 +64,35 @@ export default function CheckInView({ patient, onCheckIn, onGoToExercises }: Che
       checkInHistory: dailyLogs
     };
   }, [patient, dailyLogs]);
+
+  const handleDeleteLog = async (e: React.MouseEvent, item: CheckInRecord) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const confirmed = window.confirm("ต้องการลบรายการประวัตินี้ใช่หรือไม่?");
+    if (!confirmed) return;
+
+    const logId = item.id || item.timestamp || item.date;
+    
+    // Remove the deleted item from UI state immediately
+    setDailyLogs(prev => prev.filter(l => (l.id || l.timestamp || l.date) !== logId));
+
+    try {
+      await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          action: "delete",
+          sheetName: "Daily_Logs",
+          id: logId
+        })
+      });
+    } catch (err) {
+      console.warn('[CheckInView] Failed to send delete request to Google Sheets:', err);
+    }
+  };
 
   const isCheckedIn = hasCheckedInToday(effectivePatient);
   const todayRecord = getTodayCheckInRecord(effectivePatient);
@@ -417,6 +446,15 @@ export default function CheckInView({ patient, onCheckIn, onGoToExercises }: Che
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     สำเร็จ
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteLog(e, item)}
+                    className="relative z-20 pointer-events-auto inline-flex items-center gap-1 px-2.5 py-1 text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0"
+                    title="ลบรายการประวัตินี้"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600 pointer-events-none" />
+                    <span className="pointer-events-none">ลบ</span>
+                  </button>
                 </div>
               </div>
             ))}

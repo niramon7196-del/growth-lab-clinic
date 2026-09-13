@@ -33,8 +33,8 @@ import {
   CalendarPlus,
   Loader2
 } from 'lucide-react';
-import { Patient, SessionLog, Appointment, HomeworkAssignment, NutritionLog, GrowthLog, ExerciseLog } from '../types';
-import { calculateConsistencyMetrics, formatThaiDate, formatThaiTimestamp, hasCheckedInToday } from '../utils/checkInCalculations';
+import { Patient, SessionLog, Appointment, HomeworkAssignment, NutritionLog, GrowthLog, ExerciseLog, CheckInRecord } from '../types';
+import { calculateConsistencyMetrics, formatThaiDate, formatThaiTimestamp, hasCheckedInToday, formatAppointmentTime } from '../utils/checkInCalculations';
 import HomeworkAssignmentManager from './HomeworkAssignmentManager';
 import TreatmentRecords from './TreatmentRecords';
 import GrowthNutritionScore from './GrowthNutritionScore';
@@ -43,6 +43,7 @@ import ExerciseTracker from './ExerciseTracker';
 import ExerciseTrainer from './ExerciseTrainer';
 import BeforeAfter from './BeforeAfter';
 import { VERIFIED_EXERCISES } from '../data';
+import { resolvePatientAppointments } from '../utils/appointmentMockService';
 import { getPatientAssignedExercises } from '../../exerciseHelper';
 import { useScrollLock } from '../utils';
 import { Logo } from './Logo';
@@ -274,27 +275,50 @@ export default function UserWorkspace({
     return patient ? formatPatientDisplay(patient) : null;
   }, [patient]);
 
+  const handleDeleteDailyLog = async (e: React.MouseEvent, itemOrId: CheckInRecord | string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!window.confirm("ต้องการลบรายการประวัตินี้ใช่หรือไม่?")) {
+      return;
+    }
+
+    const logId = typeof itemOrId === 'string'
+      ? itemOrId
+      : (itemOrId.id || itemOrId.timestamp || itemOrId.date || '');
+
+    if (patient) {
+      const updatedHistory = (patient.checkInHistory || []).filter(l => 
+        (l.id || l.timestamp || l.date) !== logId && l.id !== logId && l.timestamp !== logId && l.date !== logId
+      );
+      const updatedPatient = { ...patient, checkInHistory: updatedHistory };
+      onEditPatient(updatedPatient);
+    }
+
+    try {
+      await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          action: "delete",
+          sheetName: "Daily_Logs",
+          id: logId
+        })
+      });
+    } catch (err) {
+      console.warn('[UserWorkspace] Error deleting daily log from Google Sheets:', err);
+    }
+  };
+
   // Scoped Data
   const patientLogs = useMemo(() => {
     return patient ? logs.filter((l) => l.patientId === patient.id) : [];
   }, [logs, patient]);
 
   const patientAppointments = useMemo(() => {
-    if (!patient) return [];
-    const fromGlobal = appointments.filter((a) => (a.patientId === patient.id || a.patientId === patient.hn || (a as any).hn === patient.hn) && a.status !== 'cancelled');
-    const fromPatientRecord: Appointment[] = (patient.appointments || []).map((pa: any, idx: number) => ({
-      id: pa.id || `pa_${idx}`,
-      patientId: patient.id,
-      patientName: `${patient.firstName} ${patient.lastName}`.trim(),
-      date: pa.date,
-      time: pa.time || '10:00',
-      type: pa.type || 'clinical',
-      notes: pa.notes || pa.title || '',
-      status: pa.status || 'pending'
-    }));
-    const combined = [...fromGlobal, ...fromPatientRecord];
-    const unique = Array.from(new Map(combined.map(item => [item.id || item.date, item])).values());
-    return unique.filter(a => a.status !== 'cancelled').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return resolvePatientAppointments(patient, appointments);
   }, [appointments, patient]);
 
   const upcomingAppt = useMemo(() => {
@@ -765,7 +789,7 @@ export default function UserWorkspace({
                   {upcomingAppt ? (
                     <div>
                       <span className="text-sm font-black text-slate-900 block truncate">
-                        {formatThaiDate(upcomingAppt.date)} ({upcomingAppt.time} น.)
+                        {formatThaiDate(upcomingAppt.date)} ({formatAppointmentTime(upcomingAppt.time)} น.)
                       </span>
                       <span className="text-xs font-bold text-indigo-700 block mt-0.5">
                         {upcomingAppt.type === 'clinical' ? 'ตรวจที่คลินิก' : upcomingAppt.type === 'online' ? 'ปรึกษาออนไลน์' : 'ปรึกษาพิเศษ'}
@@ -1107,10 +1131,21 @@ export default function UserWorkspace({
                             </div>
                           </td>
                           <td className="py-3.5 px-4 text-right">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>สำเร็จ (COMPLETED)</span>
-                            </span>
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>สำเร็จ (COMPLETED)</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteDailyLog(e, rec)}
+                                className="relative z-20 pointer-events-auto inline-flex items-center gap-1 px-2.5 py-1 text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0"
+                                title="ลบรายการประวัตินี้"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-600 pointer-events-none" />
+                                <span className="pointer-events-none">ลบ</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1382,9 +1417,20 @@ export default function UserWorkspace({
                       <span className="text-xs font-bold text-emerald-950">
                         เช็คอินประจำวันสำเร็จ ({ci.source === 'QR' ? 'QR Code' : 'Application'})
                       </span>
-                      <span className="text-[10px] text-emerald-700 font-mono">
-                        {formatThaiDate(ci.date)} {ci.timestamp ? formatThaiTimestamp(ci.timestamp) : ''}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-emerald-700 font-mono">
+                          {formatThaiDate(ci.date)} {ci.timestamp ? formatThaiTimestamp(ci.timestamp) : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteDailyLog(e, ci)}
+                          className="relative z-20 pointer-events-auto inline-flex items-center gap-1 px-2.5 py-1 text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0"
+                          title="ลบรายการประวัตินี้"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600 pointer-events-none" />
+                          <span className="pointer-events-none">ลบ</span>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-xs text-emerald-800/80 mt-1">
                       สถานะ: สำเร็จ (COMPLETED) • ดำเนินการโดย: {ci.performedBy || patient.firstName}
@@ -1935,7 +1981,7 @@ export default function UserWorkspace({
               <div className="overflow-y-auto overscroll-contain flex-1">
                 <h3 className="text-base font-bold text-slate-900">ยืนยันการลบรายการนัดหมาย?</h3>
                 <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  คุณต้องการลบนัดหมายวันที่ <span className="font-semibold text-slate-800">{new Date(deletingAppt.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} เวลา {deletingAppt.time} น.</span> ออกจากระบบใช่หรือไม่?
+                  คุณต้องการลบนัดหมายวันที่ <span className="font-semibold text-slate-800">{formatThaiDate(deletingAppt.date)} เวลา {formatAppointmentTime(deletingAppt.time)} น.</span> ออกจากระบบใช่หรือไม่?
                 </p>
                 <div className="mt-2.5 p-2 bg-rose-50 border border-rose-100 rounded-xl text-[11px] text-rose-700">
                   ⚠️ ระบบจะส่งคำสั่งลบข้อมูลออกจาก Google Sheets (Two-way Deletion) และฐานข้อมูลทันที

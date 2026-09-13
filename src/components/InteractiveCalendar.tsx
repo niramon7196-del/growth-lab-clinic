@@ -20,14 +20,16 @@ import {
   X,
   Phone,
   MessageSquare,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 import { Appointment, Patient } from '../types';
-import { getCleanPatientDisplayName, getCleanNotes } from './AppointmentsList';
+import { getCleanPatientDisplayName, getCleanNotes, formatDisplayTime } from './AppointmentsList';
 import { getGoogleCalendarWebUrl, downloadAppointmentIcs } from '../utils/calendarExport';
 import { syncAppointmentToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
 import { playSuccessChime } from '../utils/audioUtils';
 import { dataAdapter } from '../services/dataAdapter';
+import { formatThaiDate } from '../utils/checkInCalculations';
 
 interface InteractiveCalendarProps {
   appointments: Appointment[];
@@ -36,6 +38,7 @@ interface InteractiveCalendarProps {
   onEventClick?: (appointment: Appointment) => void;
   onUpdateAppointmentStatus?: (id: string, status: any, notes?: string) => void;
   onUpdateAppointment?: (appointment: Appointment) => void;
+  onDeleteAppointment?: (id: string) => void;
 }
 
 export default function InteractiveCalendar({ 
@@ -44,7 +47,8 @@ export default function InteractiveCalendar({
   onDateClick, 
   onEventClick,
   onUpdateAppointmentStatus,
-  onUpdateAppointment
+  onUpdateAppointment,
+  onDeleteAppointment
 }: InteractiveCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -72,7 +76,7 @@ export default function InteractiveCalendar({
   useEffect(() => {
     if (selectedApptForApproval) {
       setNewApptDate(selectedApptForApproval.date || todayStr);
-      setNewApptTime(selectedApptForApproval.time || '10:00');
+      setNewApptTime(formatDisplayTime(selectedApptForApproval.time) || '10:00');
       setClinicReplyNotes(getCleanNotes(selectedApptForApproval.notes));
       setShowRescheduleForm(false);
       setApprovalFeedback(null);
@@ -129,6 +133,21 @@ export default function InteractiveCalendar({
       alert('กรุณาเลือกวันนัดหมายใหม่');
       return;
     }
+
+    // Check duplicate booking: same patient on the same date and time
+    const targetTime = newApptTime || '10:00';
+    const isDuplicate = appointments.some(a => {
+      if (a.id === selectedApptForApproval.id || a.status === 'cancelled') return false;
+      const samePatient = a.patientId === selectedApptForApproval.patientId || 
+        (selectedApptForApproval.hn && a.hn && a.hn.toLowerCase() === selectedApptForApproval.hn.toLowerCase());
+      return samePatient && a.date === newApptDate && a.time === targetTime;
+    });
+
+    if (isDuplicate) {
+      window.alert("ช่วงเวลานี้มีนัดหมายอยู่แล้ว กรุณาเลือกวันหรือเวลาอื่น");
+      return;
+    }
+
     setIsSubmittingApproval(true);
     setApprovalFeedback(null);
     try {
@@ -137,7 +156,7 @@ export default function InteractiveCalendar({
       const updatedAppt: Appointment = {
         ...selectedApptForApproval,
         date: newApptDate,
-        time: newApptTime || '10:00',
+        time: targetTime,
         status: targetStatus,
         notes: updatedNotes || selectedApptForApproval.notes
       };
@@ -225,10 +244,73 @@ export default function InteractiveCalendar({
   const isToday = (date: Date) => formatYmd(date) === todayStr;
 
   const getAppointmentsForDate = (date: Date | string) => {
-    const dateStr = typeof date === 'string' ? date : formatYmd(date);
+    let targetYear: number;
+    let targetMonth: number; // 1-12
+    let targetDay: number; // 1-31
+
+    if (date instanceof Date) {
+      targetYear = date.getFullYear();
+      targetMonth = date.getMonth() + 1;
+      targetDay = date.getDate();
+    } else {
+      let clean = (date || '').trim();
+      if (clean.includes('T')) clean = clean.split('T')[0];
+      const parts = clean.split('-');
+      if (parts.length === 3) {
+        let pY = parseInt(parts[0], 10);
+        if (pY > 2400) pY -= 543;
+        targetYear = pY;
+        targetMonth = parseInt(parts[1], 10);
+        targetDay = parseInt(parts[2], 10);
+      } else {
+        const dObj = new Date(date);
+        targetYear = dObj.getFullYear();
+        targetMonth = dObj.getMonth() + 1;
+        targetDay = dObj.getDate();
+      }
+    }
+
     return appointments
-      .filter(a => a.date === dateStr && a.status !== 'cancelled')
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .filter(a => {
+        if (!a || !a.date) return false;
+        // Keep active appointments visible on Calendar unless permanently deleted from Google Sheets
+        if (a.status === 'cancelled' || a.status === 'ยกเลิก') return false;
+
+        let clean = (a.date || '').trim();
+        if (clean.includes('T')) clean = clean.split('T')[0];
+        
+        let aYear = 0;
+        let aMonth = 0;
+        let aDay = 0;
+
+        if (clean.includes('/')) {
+          const slashParts = clean.split('/');
+          if (slashParts.length === 3) {
+            if (slashParts[2].length === 4) {
+              aDay = parseInt(slashParts[0], 10);
+              aMonth = parseInt(slashParts[1], 10);
+              aYear = parseInt(slashParts[2], 10);
+            } else {
+              aYear = parseInt(slashParts[0], 10);
+              aMonth = parseInt(slashParts[1], 10);
+              aDay = parseInt(slashParts[2], 10);
+            }
+          }
+        } else {
+          const parts = clean.split('-');
+          if (parts.length === 3) {
+            aYear = parseInt(parts[0], 10);
+            aMonth = parseInt(parts[1], 10);
+            aDay = parseInt(parts[2], 10);
+          }
+        }
+
+        if (aYear > 2400) aYear -= 543;
+
+        // Match the calendar cell purely by the parseInt(day) and month/year match
+        return aDay === targetDay && aMonth === targetMonth && aYear === targetYear;
+      })
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   };
 
   // Appointments for the selected day
@@ -237,7 +319,8 @@ export default function InteractiveCalendar({
   // Selected date object
   const getSelectedDateObj = () => {
     try {
-      const parts = selectedDateStr.split('-');
+      const clean = (selectedDateStr || '').includes('T') ? selectedDateStr.split('T')[0] : selectedDateStr;
+      const parts = clean.split('-');
       if (parts.length === 3) {
         return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       }
@@ -250,28 +333,22 @@ export default function InteractiveCalendar({
 
   // Format selected date in full Thai
   const formatSelectedDateThai = (dateStr: string) => {
-    try {
-      const parts = dateStr.split('-');
-      if (parts.length === 3) {
-        const y = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1;
-        const d = parseInt(parts[2], 10);
-        const dateObj = new Date(y, m, d);
-        const dayOfWeek = thaiDayNames[dateObj.getDay()] || 'วัน';
-        const mName = monthNames[m] || '';
-        return `${dayOfWeek}ที่ ${d} ${mName} ${y + 543}`;
-      }
-    } catch {
-      // ignore
-    }
-    return dateStr;
+    return formatThaiDate(dateStr, { showWeekday: true, longMonth: true, showYear: true });
   };
 
   // Total appointments in current visible month
   const monthAppointmentsCount = appointments.filter(a => {
-    if (!a.date || a.status === 'cancelled') return false;
-    const parts = a.date.split('-');
-    return parts.length >= 2 && parseInt(parts[0], 10) === year && parseInt(parts[1], 10) === month + 1;
+    if (!a || !a.date || a.status === 'cancelled' || a.status === 'ยกเลิก') return false;
+    let clean = (a.date || '').trim();
+    if (clean.includes('T')) clean = clean.split('T')[0];
+    const parts = clean.split('-');
+    if (parts.length >= 2) {
+      let aY = parseInt(parts[0], 10);
+      if (aY > 2400) aY -= 543;
+      const aM = parseInt(parts[1], 10);
+      return aY === year && aM === month + 1;
+    }
+    return false;
   }).length;
 
   return (
@@ -359,7 +436,7 @@ export default function InteractiveCalendar({
                 </span>
               </div>
               <p className="text-[11px] text-white/95 font-medium mt-1">
-                รายชื่อคนไข้: {pendingReschedules.map(a => `${getCleanPatientDisplayName(a.patientName)} (${a.date})`).join(' • ')}
+                รายชื่อคนไข้: {pendingReschedules.map(a => `${getCleanPatientDisplayName(a.patientName)} (${formatThaiDate(a.date)})`).join(' • ')}
               </p>
             </div>
           </div>
@@ -564,7 +641,7 @@ export default function InteractiveCalendar({
                         >
                           {isRescheduleRequested && <span className="text-[8px] shrink-0">⚠️</span>}
                           {isConfirmed && <span className="text-[8px] shrink-0">✓</span>}
-                          <span className="font-mono text-[7px] md:text-[8px] shrink-0 opacity-90">{appt.time}</span>
+                          <span className="font-mono text-[7px] md:text-[8px] shrink-0 opacity-90">{formatDisplayTime(appt.time)}</span>
                           <span className="truncate">{getCleanPatientDisplayName(appt.patientName)}</span>
                         </div>
                       );
@@ -618,7 +695,7 @@ export default function InteractiveCalendar({
                   {selectedDayAppointments.map((a, idx) => (
                     <span key={a.id}>
                       {idx > 0 && ' | '}
-                      เวลา {a.time} น. คุณ{getCleanPatientDisplayName(a.patientName)} ({a.type || 'ตรวจติดตาม'})
+                      เวลา {formatDisplayTime(a.time)} น. คุณ{getCleanPatientDisplayName(a.patientName)} ({a.type || 'ตรวจติดตาม'})
                     </span>
                   ))}
                 </span>
@@ -702,7 +779,7 @@ export default function InteractiveCalendar({
                     <div className="flex items-center justify-between gap-2 mb-2.5">
                       <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-200/80 text-indigo-900 font-mono font-bold text-xs">
                         <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span>{appt.time} น.</span>
+                        <span>{formatDisplayTime(appt.time)} น.</span>
                       </div>
                       
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1.5 ${
@@ -762,7 +839,7 @@ export default function InteractiveCalendar({
                         {/* Doctor / Care Provider */}
                         <p className="text-xs text-slate-600 mt-1.5 font-medium flex items-center gap-1.5">
                           <User className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                          <span>แพทย์/ผู้ดูแล: <strong className="text-slate-800">{appt.dentistName || 'ทพญ. นภาพร วรรณษา'}</strong></span>
+                          <span>แพทย์/ผู้ดูแล: <strong className="text-slate-800">{appt.dentistName && appt.dentistName.includes('นภาพร') ? 'ทันตแพทย์หญิง นภาพร วรรณษา' : (appt.dentistName || 'ทันตแพทย์หญิง นภาพร วรรณษา')}</strong></span>
                         </p>
 
                         {cleanNotes && (
@@ -830,6 +907,42 @@ export default function InteractiveCalendar({
                       ID: {appt.id.slice(-6)}
                     </span>
                     <div className="flex items-center gap-1.5">
+                      {onDeleteAppointment && (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (window.confirm("ต้องการยกเลิกนัดหมายนี้ใช่หรือไม่?")) {
+                              const appointmentId = (appt as any).appointment_id || appt.id;
+                              
+                              try {
+                                await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "text/plain;charset=utf-8"
+                                  },
+                                  body: JSON.stringify({
+                                    action: "deleteAppointment",
+                                    sheetName: "Appointments",
+                                    id: appointmentId
+                                  })
+                                });
+                              } catch (err) {
+                                console.warn('[InteractiveCalendar] Error sending delete appointment request:', err);
+                              }
+
+                              onDeleteAppointment(appt.id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                          title="ยกเลิกนัดหมายนี้"
+                          aria-label="ยกเลิกนัดหมาย"
+                        >
+                          <Trash2 className="w-3 h-3 text-rose-600" />
+                          <span>ยกเลิกนัด</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -972,11 +1085,11 @@ export default function InteractiveCalendar({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-xs text-slate-600">
                           <div className="flex items-center gap-1.5">
                             <CalendarIcon className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                            <span>วันนัด: <strong className="text-slate-800">{selectedApptForApproval.date}</strong></span>
+                            <span>วันนัด: <strong className="text-slate-800">{formatThaiDate(selectedApptForApproval.date)}</strong></span>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                            <span>เวลา: <strong className="text-slate-800">{selectedApptForApproval.time} น.</strong></span>
+                            <span>เวลา: <strong className="text-slate-800">{formatDisplayTime(selectedApptForApproval.time)} น.</strong></span>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
@@ -1076,9 +1189,12 @@ export default function InteractiveCalendar({
 
                         <button
                           type="button"
-                          onClick={handleClinicReschedule}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClinicReschedule();
+                          }}
                           disabled={isSubmittingApproval}
-                          className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                          className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer pointer-events-auto relative z-50 disabled:opacity-50"
                         >
                           {isSubmittingApproval ? (
                             <>
@@ -1100,9 +1216,12 @@ export default function InteractiveCalendar({
                       {/* Button ก: ✅ ยืนยันนัดหมาย */}
                       <button
                         type="button"
-                        onClick={() => handleClinicConfirm(selectedApptForApproval)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClinicConfirm(selectedApptForApproval);
+                        }}
                         disabled={isSubmittingApproval}
-                        className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer pointer-events-auto relative z-50 disabled:opacity-50"
                       >
                         {isSubmittingApproval ? (
                           <>
@@ -1120,12 +1239,53 @@ export default function InteractiveCalendar({
                       {/* Button ข: 📅 เลื่อนนัด / เปลี่ยนเวลา */}
                       <button
                         type="button"
-                        onClick={() => setShowRescheduleForm(prev => !prev)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowRescheduleForm(prev => !prev);
+                        }}
                         disabled={isSubmittingApproval}
-                        className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer pointer-events-auto relative z-50"
                       >
                         <CalendarClock className="w-4 h-4" />
                         <span>📅 เลื่อนนัด / เปลี่ยนเวลา</span>
+                      </button>
+
+                      {/* Button ค: 🗑️ ยกเลิกนัดหมาย */}
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (window.confirm("ต้องการยกเลิกและลบนัดหมายนี้ใช่หรือไม่?")) {
+                            const appointmentId = (selectedApptForApproval as any).appointment_id || selectedApptForApproval.id;
+                            
+                            try {
+                              await fetch("https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec", {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "text/plain;charset=utf-8"
+                                },
+                                body: JSON.stringify({
+                                  action: "deleteAppointment",
+                                  sheetName: "Appointments",
+                                  id: appointmentId
+                                })
+                              });
+                            } catch (err) {
+                              console.warn('[InteractiveCalendar] Error sending delete appointment request:', err);
+                            }
+
+                            if (onDeleteAppointment) {
+                              onDeleteAppointment(selectedApptForApproval.id);
+                            }
+                            setSelectedApptForApproval(null);
+                          }
+                        }}
+                        disabled={isSubmittingApproval}
+                        className="w-full sm:w-auto py-3 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer pointer-events-auto relative z-50"
+                        title="ยกเลิกนัดหมาย"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-600" />
+                        <span>ยกเลิกนัด</span>
                       </button>
                     </div>
                   </>

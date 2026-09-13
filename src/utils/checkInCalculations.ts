@@ -9,20 +9,206 @@ export function getTodayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
-export function formatThaiDate(dateStr: string): string {
+/**
+ * Strictly parses a date string (YYYY-MM-DD) into a local Date without UTC conversion or timezone shifts.
+ */
+export function parseLocalDate(dateStr?: string | null): Date {
+  if (!dateStr) return new Date();
+  const clean = (dateStr.includes('T') ? dateStr.split('T')[0] : dateStr).trim();
+  const parts = clean.split('-');
+  if (parts.length >= 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return new Date(y, m, d);
+    }
+  }
+  const dObj = new Date(dateStr);
+  return isNaN(dObj.getTime()) ? new Date() : dObj;
+}
+
+/**
+ * Extracts local date components and Thai labels strictly from local calendar day/month/year.
+ */
+export function getLocalDateParts(dateStr?: string | null) {
+  if (!dateStr) {
+    const now = new Date();
+    dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  const clean = (dateStr.includes('T') ? dateStr.split('T')[0] : dateStr).trim();
+  const parts = clean.split('-');
+  let y = 2026;
+  let m = 8; // Sep (0-indexed)
+  let d = 17;
+  if (parts.length >= 3) {
+    const parsedY = parseInt(parts[0], 10);
+    const parsedM = parseInt(parts[1], 10) - 1;
+    const parsedD = parseInt(parts[2], 10);
+    if (!isNaN(parsedY) && !isNaN(parsedM) && !isNaN(parsedD)) {
+      y = parsedY;
+      m = parsedM;
+      d = parsedD;
+    }
+  } else {
+    const dObj = new Date(dateStr);
+    if (!isNaN(dObj.getTime())) {
+      y = dObj.getFullYear();
+      m = dObj.getMonth();
+      d = dObj.getDate();
+    }
+  }
+
+  const localObj = new Date(y, m, d);
+  const monthsThaiShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const monthsThaiLong = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน',
+    'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม',
+    'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+  const thaiDayNames = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+  const thaiDayShort = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+  const dayIdx = localObj.getDay();
+  const thaiYear = y > 2400 ? y : y + 543;
+
+  return {
+    year: y,
+    monthIndex: m,
+    day: d,
+    thaiYear,
+    thaiMonthShort: monthsThaiShort[m] || '',
+    thaiMonthLong: monthsThaiLong[m] || '',
+    thaiWeekdayShort: thaiDayShort[dayIdx] || '',
+    thaiWeekdayLong: thaiDayNames[dayIdx] || '',
+    formattedShort: `${d} ${monthsThaiShort[m] || ''}`,
+    formattedFull: `${d} ${monthsThaiShort[m] || ''} ${thaiYear}`,
+    formattedWithWeekday: `${thaiDayShort[dayIdx] || ''} ${d} ${monthsThaiShort[m] || ''} ${thaiYear}`
+  };
+}
+
+export function formatThaiDate(
+  dateStr: string,
+  options?: { showYear?: boolean; longMonth?: boolean; showWeekday?: boolean }
+): string {
   if (!dateStr) return '';
   try {
-    const parts = dateStr.split('-');
-    if (parts.length < 3) return dateStr;
-    const y = parseInt(parts[0], 10);
-    const m = parseInt(parts[1], 10);
-    const d = parseInt(parts[2], 10);
-    if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
-    const monthsThai = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-    return `${d} ${monthsThai[m - 1]} ${y + 543}`;
+    let clean = (dateStr.includes('T') ? dateStr.split('T')[0] : dateStr).trim();
+
+    if (clean.includes('/')) {
+      const slashParts = clean.split('/');
+      if (slashParts.length === 3 && slashParts[2].length === 4) {
+        clean = `${slashParts[2]}-${slashParts[1].padStart(2, '0')}-${slashParts[0].padStart(2, '0')}`;
+      }
+    }
+
+    const [year, month, day] = clean.split('-');
+    if (!year || !month || !day) return dateStr;
+
+    const yNum = parseInt(year, 10);
+    const mNum = parseInt(month, 10);
+    const dNum = parseInt(day, 10);
+    if (isNaN(yNum) || isNaN(mNum) || isNaN(dNum)) return dateStr;
+
+    const thaiYear = yNum > 2400 ? yNum : yNum + 543;
+    const thaiMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+    const thaiMonthsLong = [
+      "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน",
+      "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม",
+      "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+
+    const monthName = options?.longMonth ? thaiMonthsLong[mNum - 1] : thaiMonths[mNum - 1];
+
+    let prefix = '';
+    if (options?.showWeekday) {
+      let adYear = yNum;
+      if (adYear > 2400) adYear -= 543;
+      // Direct Sakamoto algorithm for exact day of week (0=Sun..6=Sat) without any timezone/UTC conversion
+      const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+      let calcYear = adYear;
+      if (mNum < 3) calcYear -= 1;
+      const dayIdx = (calcYear + Math.floor(calcYear / 4) - Math.floor(calcYear / 100) + Math.floor(calcYear / 400) + t[mNum - 1] + dNum) % 7;
+      const thaiDayNames = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+      const thaiDayShort = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+      prefix = options?.longMonth ? `${thaiDayNames[dayIdx]}ที่ ` : `${thaiDayShort[dayIdx]} `;
+    }
+
+    const yearPart = options?.showYear !== false ? ` ${thaiYear}` : '';
+    return `${prefix}${dNum} ${monthName}${yearPart}`.trim();
   } catch {
     return dateStr;
   }
+}
+
+/**
+ * Safely format appointment times.
+ * Formats all appointment times using a regex or parser: if it contains an ISO string,
+ * extracts the hours:minutes in Bangkok timezone or regex fallback to "10:30".
+ * Never displays the "1899-12-30" string under any circumstance.
+ */
+export function formatAppointmentTime(rawTime: any): string {
+  if (!rawTime) return '10:30';
+  let str = String(rawTime).trim();
+  if (!str) return '10:30';
+
+  // Remove trailing "น." or " น." if already present
+  str = str.replace(/\s*น\.?$/, '').trim();
+
+  // If already clean HH:mm (e.g. "10:30" or "09:15")
+  if (/^\d{1,2}:\d{2}$/.test(str)) {
+    const [h, m] = str.split(':');
+    return `${h.padStart(2, '0')}:${m}`;
+  }
+
+  // If HH:mm:ss (e.g. "10:30:00")
+  if (/^\d{1,2}:\d{2}:\d{2}$/.test(str)) {
+    const [h, m] = str.split(':');
+    return `${h.padStart(2, '0')}:${m}`;
+  }
+
+  // If ISO format like "1899-12-30T03:47:56.000Z" from Google Sheets time cells
+  if (str.includes('T') || str.includes('1899')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const bangkokTime = new Intl.DateTimeFormat('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'Asia/Bangkok'
+        }).format(d);
+        if (bangkokTime && /^\d{2}:\d{2}$/.test(bangkokTime)) {
+          return bangkokTime;
+        }
+      }
+    } catch {}
+
+    const isoMatch = str.match(/T(\d{2}):(\d{2})/);
+    if (isoMatch) {
+      const utcHours = parseInt(isoMatch[1], 10);
+      const minutes = isoMatch[2];
+      if (str.endsWith('Z')) {
+        const bkkHours = (utcHours + 7) % 24;
+        return `${String(bkkHours).padStart(2, '0')}:${minutes}`;
+      }
+      return `${isoMatch[1]}:${minutes}`;
+    }
+    return '10:30';
+  }
+
+  // If dot separated (e.g. "10.30")
+  const dotMatch = str.match(/^(\d{1,2})\.(\d{2})/);
+  if (dotMatch) {
+    return `${dotMatch[1].padStart(2, '0')}:${dotMatch[2]}`;
+  }
+
+  // Any HH:mm inside string
+  const anyTimeMatch = str.match(/(\d{1,2}):(\d{2})/);
+  if (anyTimeMatch) {
+    return `${anyTimeMatch[1].padStart(2, '0')}:${anyTimeMatch[2]}`;
+  }
+
+  return '10:30';
 }
 
 export function formatThaiTimestamp(timestampStr?: string): string {

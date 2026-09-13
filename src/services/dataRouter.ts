@@ -89,10 +89,15 @@ export function formatAppointment9Columns(appointment: any): {
 
   // 4. Date (YYYY-MM-DD)
   let apptDate = (appointment.date || appointment.Date || '').toString().trim();
+  if (apptDate.includes('T')) {
+    apptDate = apptDate.split('T')[0];
+  }
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(apptDate)) {
+    const [d, m, y] = apptDate.split('/');
+    apptDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
   if (!apptDate) {
     apptDate = new Date().toISOString().split('T')[0];
-  } else if (apptDate.includes('T')) {
-    apptDate = apptDate.split('T')[0];
   }
 
   // 5. Time (HH:MM)

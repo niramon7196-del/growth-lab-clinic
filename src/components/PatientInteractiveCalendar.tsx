@@ -21,6 +21,7 @@ import { syncAppointmentToGoogleSheets, getWebhookUrl } from '../services/google
 import { playSuccessChime } from '../utils/audioUtils';
 import { getCleanNotes } from './AppointmentsList';
 import { resolvePatientAppointments, persistAppointmentLocally } from '../utils/appointmentMockService';
+import { formatThaiDate, formatAppointmentTime, getLocalDateParts, parseLocalDate } from '../utils/checkInCalculations';
 
 interface PatientInteractiveCalendarProps {
   patient: Patient;
@@ -45,8 +46,7 @@ export default function PatientInteractiveCalendar({
 
   const todayStr = formatYmd(new Date());
 
-  // Filter and resolve patient appointments: guarantees stable mock appointments immediately
-  // without depending on raw Google Sheets availability, while seamlessly merging any real updates!
+  // Filter and resolve patient appointments: accurately reflects Google Sheets appointments for this patient
   const filteredAppointments = useMemo(() => {
     return resolvePatientAppointments(patient, appointments, currentDate);
   }, [appointments, patient, currentDate]);
@@ -69,12 +69,27 @@ export default function PatientInteractiveCalendar({
       setSelectedApptId(initialAppt.id);
       setSelectedDateStr(initialAppt.date);
       setNoteInput(getCleanNotes(initialAppt.notes));
+
+      // Synchronize calendar view month with the initial appointment
+      const parts = initialAppt.date.split('-');
+      if (parts.length >= 2) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        if (y && m) {
+          setCurrentDate(prev => {
+            if (prev.getFullYear() !== y || prev.getMonth() !== m - 1) {
+              return new Date(y, m - 1, 1);
+            }
+            return prev;
+          });
+        }
+      }
     }
   }, [initialAppt, filteredAppointments]);
 
   // When selected date changes or appointments list updates, sync selected appointment & note input
   useEffect(() => {
-    const apptsOnSelectedDate = filteredAppointments.filter(a => a.date === selectedDateStr);
+    const apptsOnSelectedDate = getAppointmentsForDate(selectedDateStr);
     if (apptsOnSelectedDate.length > 0) {
       const match = apptsOnSelectedDate.find(a => a.id === selectedApptId) || apptsOnSelectedDate[0];
       setSelectedApptId(match.id);
@@ -95,10 +110,21 @@ export default function PatientInteractiveCalendar({
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const currentMonthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
   const currentMonthAppointments = useMemo(() => {
-    return filteredAppointments.filter(a => a.date.startsWith(currentMonthPrefix) && a.status !== 'cancelled');
-  }, [filteredAppointments, currentMonthPrefix]);
+    return filteredAppointments.filter(a => {
+      if (!a || !a.date || a.status === 'cancelled' || a.status === 'ยกเลิก') return false;
+      let clean = (a.date || '').trim();
+      if (clean.includes('T')) clean = clean.split('T')[0];
+      const parts = clean.split('-');
+      if (parts.length >= 2) {
+        let aY = parseInt(parts[0], 10);
+        if (aY > 2400) aY -= 543;
+        const aM = parseInt(parts[1], 10);
+        return aY === year && aM === month + 1;
+      }
+      return false;
+    });
+  }, [filteredAppointments, year, month]);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = new Date(year, month, 1).getDay();
@@ -138,10 +164,73 @@ export default function PatientInteractiveCalendar({
   const isToday = (date: Date) => formatYmd(date) === todayStr;
 
   const getAppointmentsForDate = (date: Date | string) => {
-    const dateStr = typeof date === 'string' ? date : formatYmd(date);
+    let targetYear: number;
+    let targetMonth: number; // 1-12
+    let targetDay: number; // 1-31
+
+    if (date instanceof Date) {
+      targetYear = date.getFullYear();
+      targetMonth = date.getMonth() + 1;
+      targetDay = date.getDate();
+    } else {
+      let clean = (date || '').trim();
+      if (clean.includes('T')) clean = clean.split('T')[0];
+      const parts = clean.split('-');
+      if (parts.length === 3) {
+        let pY = parseInt(parts[0], 10);
+        if (pY > 2400) pY -= 543;
+        targetYear = pY;
+        targetMonth = parseInt(parts[1], 10);
+        targetDay = parseInt(parts[2], 10);
+      } else {
+        const dObj = new Date(date);
+        targetYear = dObj.getFullYear();
+        targetMonth = dObj.getMonth() + 1;
+        targetDay = dObj.getDate();
+      }
+    }
+
     return filteredAppointments
-      .filter(a => a.date === dateStr && a.status !== 'cancelled')
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .filter(a => {
+        if (!a || !a.date) return false;
+        // Keep active appointments visible on Calendar unless permanently deleted from Google Sheets
+        if (a.status === 'cancelled' || a.status === 'ยกเลิก') return false;
+
+        let clean = (a.date || '').trim();
+        if (clean.includes('T')) clean = clean.split('T')[0];
+        
+        let aYear = 0;
+        let aMonth = 0;
+        let aDay = 0;
+
+        if (clean.includes('/')) {
+          const slashParts = clean.split('/');
+          if (slashParts.length === 3) {
+            if (slashParts[2].length === 4) {
+              aDay = parseInt(slashParts[0], 10);
+              aMonth = parseInt(slashParts[1], 10);
+              aYear = parseInt(slashParts[2], 10);
+            } else {
+              aYear = parseInt(slashParts[0], 10);
+              aMonth = parseInt(slashParts[1], 10);
+              aDay = parseInt(slashParts[2], 10);
+            }
+          }
+        } else {
+          const parts = clean.split('-');
+          if (parts.length === 3) {
+            aYear = parseInt(parts[0], 10);
+            aMonth = parseInt(parts[1], 10);
+            aDay = parseInt(parts[2], 10);
+          }
+        }
+
+        if (aYear > 2400) aYear -= 543;
+
+        // Match the calendar cell purely by the parseInt(day) and month/year match
+        return aDay === targetDay && aMonth === targetMonth && aYear === targetYear;
+      })
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   };
 
   const selectedDayAppointments = getAppointmentsForDate(selectedDateStr);
@@ -159,21 +248,9 @@ export default function PatientInteractiveCalendar({
     return initialAppt;
   }, [selectedApptId, filteredAppointments, selectedDayAppointments, initialAppt]);
 
-  // Format selected date in Thai
+  // Format selected date in Thai strictly as local date without UTC conversion
   const formatSelectedDateThai = (dateStr: string) => {
-    try {
-      const parts = dateStr.split('-');
-      if (parts.length === 3) {
-        const y = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1;
-        const d = parseInt(parts[2], 10);
-        const dateObj = new Date(y, m, d);
-        const dayOfWeek = thaiDayNames[dateObj.getDay()] || 'วัน';
-        const mName = monthNames[m] || '';
-        return `${dayOfWeek}ที่ ${d} ${mName} ${y + 543}`;
-      }
-    } catch {}
-    return dateStr;
+    return formatThaiDate(dateStr, { showWeekday: true, longMonth: true, showYear: true });
   };
 
   // Save notes & status to local state, persistent storage, and background Google Sheets
@@ -451,7 +528,7 @@ export default function PatientInteractiveCalendar({
                           >
                             {isRescheduleRequested && <span className="text-[6px] sm:text-[7px] shrink-0">⚠️</span>}
                             {isConfirmed && <span className="text-[6px] sm:text-[7px] shrink-0">✓</span>}
-                            <span className="font-mono text-[6px] sm:text-[7px] md:text-[8px] shrink-0">{appt.time}</span>
+                            <span className="font-mono text-[6px] sm:text-[7px] md:text-[8px] shrink-0">{formatAppointmentTime(appt.time)}</span>
                             <span className="truncate hidden sm:inline">{appt.type || 'ตรวจติดตาม'}</span>
                           </div>
                         );
@@ -481,11 +558,11 @@ export default function PatientInteractiveCalendar({
           >
             <div className="flex items-center gap-1.5 leading-tight flex-wrap">
               <span className="text-[10px] sm:text-xs md:text-sm font-black text-purple-950 shrink-0">
-                บันทึกเพิ่มเติม (วันที่ {new Date(selectedDateStr).getDate()} {monthNames[new Date(selectedDateStr).getMonth()]}):
+                บันทึกเพิ่มเติม (วันที่ {getLocalDateParts(activeAppointment?.date || selectedDateStr).day} {monthNames[getLocalDateParts(activeAppointment?.date || selectedDateStr).monthIndex]} {getLocalDateParts(activeAppointment?.date || selectedDateStr).thaiYear}):
               </span>
               {selectedDayAppointments.length > 0 ? (
                 <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-purple-800 truncate">
-                  เวลา {selectedDayAppointments[0].time} น. ({selectedDayAppointments[0].type || 'ตรวจติดตาม'}) 
+                  เวลา {formatAppointmentTime(selectedDayAppointments[0].time)} น. ({selectedDayAppointments[0].type || 'ตรวจติดตาม'}) 
                   {selectedDayAppointments[0].status && ` [${selectedDayAppointments[0].status}]`}
                 </span>
               ) : (
@@ -550,7 +627,7 @@ export default function PatientInteractiveCalendar({
                           {formatSelectedDateThai(appt.date)}
                         </span>
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
-                          ⏰ {appt.time} น.
+                          ⏰ {formatAppointmentTime(appt.time)} น.
                         </span>
                       </div>
                       <p className="text-xs font-extrabold text-indigo-900">
@@ -578,7 +655,7 @@ export default function PatientInteractiveCalendar({
                   )}
 
                   <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500 font-medium">
-                    <span>ทันตแพทย์: ทพญ. นภาพร วรรณษา</span>
+                    <span>ทันตแพทย์: {appt.dentistName && appt.dentistName.includes('นภาพร') ? 'ทันตแพทย์หญิง นภาพร วรรณษา' : (appt.dentistName || 'ทันตแพทย์หญิง นภาพร วรรณษา')}</span>
                     <span className="text-purple-700 font-bold flex items-center gap-1 group-hover:underline">
                       {isSelected ? 'เลือกดูนัดนี้อยู่ ✓' : 'แตะเพื่อดูบนปฏิทิน ➔'}
                     </span>
@@ -656,7 +733,7 @@ export default function PatientInteractiveCalendar({
           {/* Active Date Tag */}
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-900 border border-purple-200 text-xs font-bold self-start sm:self-auto">
             <Clock className="w-3.5 h-3.5 text-purple-600" />
-            <span>{formatSelectedDateThai(selectedDateStr)}</span>
+            <span>{formatSelectedDateThai(activeAppointment ? activeAppointment.date : selectedDateStr)}</span>
           </div>
         </div>
 
@@ -681,7 +758,7 @@ export default function PatientInteractiveCalendar({
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                     }`}
                   >
-                    เวลา {a.time} น. ({a.type || 'ตรวจติดตาม'})
+                    เวลา {formatAppointmentTime(a.time)} น. ({a.type || 'ตรวจติดตาม'})
                   </button>
                 ))}
               </div>
@@ -692,13 +769,13 @@ export default function PatientInteractiveCalendar({
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-black text-purple-900 text-sm">
-                    {new Date(activeAppointment.date).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} เวลา {activeAppointment.time} น.
+                    {formatSelectedDateThai(activeAppointment.date)} เวลา {formatAppointmentTime(activeAppointment.time)} น.
                   </span>
                   <span className="px-2 py-0.5 rounded-md font-bold bg-white text-indigo-700 border border-indigo-200">
                     {activeAppointment.type === 'clinical' ? 'ตรวจสดที่คลินิก' : (activeAppointment.type || 'ตรวจติดตาม OMT')}
                   </span>
                   <span className="text-slate-600 font-medium">
-                    ทันตแพทย์: ทพญ. นภาพร วรรณษา
+                    ทันตแพทย์: {activeAppointment.dentistName && activeAppointment.dentistName.includes('นภาพร') ? 'ทันตแพทย์หญิง นภาพร วรรณษา' : (activeAppointment.dentistName || 'ทันตแพทย์หญิง นภาพร วรรณษา')}
                   </span>
                 </div>
               </div>
@@ -802,11 +879,19 @@ export default function PatientInteractiveCalendar({
                   if (target) {
                     setSelectedDateStr(target.date);
                     setSelectedApptId(target.id);
+                    const parts = target.date.split('-');
+                    if (parts.length >= 2) {
+                      const y = parseInt(parts[0], 10);
+                      const m = parseInt(parts[1], 10);
+                      if (y && m) {
+                        setCurrentDate(new Date(y, m - 1, 1));
+                      }
+                    }
                   }
                 }}
                 className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold cursor-pointer transition-all shadow-xs"
               >
-                <span>ไปยังนัดหมายถัดไป ({new Date((filteredAppointments.find(a => a.date >= todayStr) || filteredAppointments[0]).date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})</span>
+                <span>ไปยังนัดหมายถัดไป ({formatThaiDate((filteredAppointments.find(a => a.date >= todayStr) || filteredAppointments[0]).date)})</span>
               </button>
             )}
           </div>

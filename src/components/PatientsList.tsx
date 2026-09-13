@@ -1370,6 +1370,14 @@ export default function PatientsList({
                     >
                       <Settings className="w-4 h-4" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setPatientToDelete(p)}
+                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                      title="ลบข้อมูล"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </motion.div>
               );
@@ -1476,8 +1484,11 @@ export default function PatientsList({
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-900">ยืนยันการลบข้อมูล</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  คุณต้องการลบข้อมูลของ <span className="font-bold text-slate-800">{patientToDelete.firstName} {patientToDelete.lastName} ({patientToDelete.hn})</span> หรือไม่?
+                <p className="text-sm font-semibold text-slate-700 mt-1">
+                  ต้องการลบรายการนี้ใช่หรือไม่?
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  คุณต้องการลบข้อมูลของ <span className="font-bold text-slate-800">{patientToDelete.firstName} {patientToDelete.lastName} ({patientToDelete.hn})</span>
                 </p>
                 <div className="mt-3 p-2.5 bg-rose-50/80 border border-rose-100 rounded-xl text-[11px] text-rose-700 text-left flex items-start gap-2">
                   <span className="shrink-0 font-bold">⚠️</span>

@@ -20,6 +20,7 @@ import { usePatientContext } from '../context/PatientContext';
 import EmptyState from './ui/EmptyState';
 import { Logo } from './Logo';
 import { getCleanPatientDisplayName, getCleanNotes } from './AppointmentsList';
+import { formatThaiDate, getLocalDateParts, parseLocalDate } from '../utils/checkInCalculations';
 
 interface NotificationsPanelProps {
   notifications: SystemNotification[];
@@ -271,7 +272,8 @@ export default function NotificationsPanel({
                 </div>
               ) : (
                 allAppointments.slice(0, 6).map((appt) => {
-                  const appointmentDate = new Date(appt.date);
+                  const apptParts = getLocalDateParts(appt.date);
+                  const appointmentDate = parseLocalDate(appt.date);
                   const patientObj = patients.find(p => p.id === appt.patientId);
                   const diffTime = appointmentDate.getTime() - new Date().getTime();
                   const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -279,10 +281,13 @@ export default function NotificationsPanel({
                   return (
                     <div key={appt.id} className="p-4 rounded-2xl bg-white border border-purple-100 shadow-2xs flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 font-black text-xs flex flex-col items-center justify-center shrink-0 border border-purple-200">
-                          <span>{isNaN(appointmentDate.getDate()) ? '📅' : appointmentDate.getDate()}</span>
+                        <div 
+                          className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 font-black text-xs flex flex-col items-center justify-center shrink-0 border border-purple-200"
+                          title={`วันนัดหมาย: ${formatThaiDate(appt.date)}`}
+                        >
+                          <span>{apptParts.day}</span>
                           <span className="text-[9px] uppercase font-bold text-purple-500">
-                            {isNaN(appointmentDate.getDate()) ? '' : appointmentDate.toLocaleDateString('th-TH', { month: 'short' })}
+                            {apptParts.thaiMonthShort}
                           </span>
                         </div>
                         <div className="space-y-0.5">
@@ -442,7 +447,7 @@ export default function NotificationsPanel({
                           {not.title}
                         </h4>
                         <span className="text-[10px] font-mono text-slate-400 font-semibold shrink-0">
-                          {new Date(not.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                          {formatThaiDate(not.date, { showYear: false })}
                         </span>
                       </div>
                       

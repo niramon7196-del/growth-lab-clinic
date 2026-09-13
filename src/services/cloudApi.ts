@@ -5,6 +5,7 @@
 
 import { Patient, Appointment, CheckInRecord, Exercise, SessionLog } from '../types';
 import { calculateAgeFromDob, getSuggestedTitlePrefix, detectGenderFromPatientData } from '../utils/patientUtils';
+import { formatAppointmentTime } from '../utils/checkInCalculations';
 import { 
   routeAppointmentToGoogleSheets, 
   formatAppointment9Columns, 
@@ -1254,9 +1255,58 @@ export async function submitExercise(
 export async function getAppointments(
   hn?: string,
   customUrl?: string
-): Promise<any[]> {
+): Promise<Appointment[]> {
   const targetUrl = customUrl || getApiUrl();
   const normalizedHn = hn ? hn.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+
+  const normalizeList = (items: any[]): Appointment[] => {
+    return items.map((item: any) => {
+      const id = item.ID || item.id || item.appointmentId || `appt_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
+      const itemHn = (item.HN || item.hn || item.patientHn || item.patientId || '').toString().trim();
+      const patientName = item.PatientName || item.patientName || item.name || 'ผู้รับการดูแล';
+      let date = (item.Date || item.date || '').toString().trim();
+      if (date.includes('T')) {
+        try {
+          const d = new Date(date);
+          if (!isNaN(d.getTime())) {
+            const bkk = new Intl.DateTimeFormat('en-CA', {
+              timeZone: 'Asia/Bangkok',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit'
+            }).format(d);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(bkk)) date = bkk;
+          }
+        } catch {}
+        if (date.includes('T')) date = date.split('T')[0];
+      }
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(date)) {
+        const [d, m, y] = date.split('/');
+        date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+      const rawTime = (item.Time || item.time || '10:30').toString().trim();
+      const time = formatAppointmentTime(rawTime);
+      const type = item.Type || item.type || 'ตรวจติดตาม';
+      const rawDoctor = String(item.Doctor || item.doctor || item.dentistName || '').trim();
+      const dentistName = rawDoctor.includes('นภาพร') ? 'ทันตแพทย์หญิง นภาพร วรรณษา' : (rawDoctor || 'ทันตแพทย์หญิง นภาพร วรรณษา');
+      const status = item.Status || item.status || 'pending';
+      const notes = item.Notes || item.notes || item.note || '';
+
+      return {
+        id: String(id),
+        patientId: itemHn || String(id),
+        patientName,
+        hn: itemHn,
+        date,
+        time,
+        type,
+        dentistName,
+        status,
+        notes,
+        googleCalendarEventId: item.googleCalendarEventId || item.GoogleCalendarEventId || undefined
+      };
+    });
+  };
 
   // 1. Primary call: action: "getAppointments" with hn parameter
   try {
@@ -1272,7 +1322,7 @@ export async function getAppointments(
       const data = await res.json().catch(() => null);
       const list = Array.isArray(data) ? data : (data?.data || data?.appointments || []);
       if (list.length > 0) {
-        return list;
+        return normalizeList(list);
       }
     }
   } catch (e) {
@@ -1288,23 +1338,66 @@ export async function getAppointments(
     const resAll = await fetch(urlAll.toString());
     if (resAll.ok) {
       const data = await resAll.json().catch(() => null);
-      const list = Array.isArray(data) ? data : (data?.data || data?.appointments || []);
-      if (normalizedHn && list.length > 0) {
-        const filtered = list.filter((item: any) => {
-          const itemHn = (item.HN || item.hn || item.patientId || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-          return itemHn === normalizedHn || itemHn.includes(normalizedHn) || normalizedHn.includes(itemHn);
-        });
-        if (filtered.length > 0) {
-          return filtered;
+      if (data !== null) {
+        const list = Array.isArray(data) ? data : (data?.data || data?.appointments || []);
+        if (normalizedHn) {
+          const filtered = (list || []).filter((item: any) => {
+            const itemHn = (item.HN || item.hn || item.patientId || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return itemHn === normalizedHn || itemHn.includes(normalizedHn) || normalizedHn.includes(itemHn);
+          });
+          return normalizeList(filtered);
         }
+        return normalizeList(list || []);
       }
-      return list;
     }
   } catch (e) {
     console.warn('[cloudApi] getAppointments fallback error:', e);
   }
 
   return [];
+}
+
+/**
+ * deleteAppointment: Delete an appointment from Google Sheets Appointments tab
+ */
+export async function deleteAppointment(
+  appointmentId: string,
+  customUrl?: string
+): Promise<{ success: boolean; error?: string }> {
+  const targetUrl = customUrl || getApiUrl();
+  const payload = {
+    action: 'deleteAppointment',
+    sheetName: 'Appointments',
+    appointmentId: appointmentId
+  };
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      return { success: true };
+    }
+  } catch {
+    try {
+      await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify(payload),
+        mode: 'no-cors'
+      });
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Delete failed' };
+    }
+  }
+  return { success: true };
 }
 
 /**
@@ -2163,6 +2256,27 @@ if (typeof window !== 'undefined') {
   });
 }
 
+export async function deleteRecord(options: {
+  sheetName: 'Daily_Logs' | 'Patients' | string;
+  id?: string;
+  hn?: string;
+}): Promise<CloudApiResponse> {
+  const payload: Record<string, any> = {
+    action: 'delete',
+    sheetName: options.sheetName,
+  };
+  if (options.sheetName === 'Daily_Logs') {
+    payload.id = options.id;
+  } else if (options.sheetName === 'Patients') {
+    payload.hn = options.hn;
+    if (options.id) payload.id = options.id;
+  } else {
+    if (options.id) payload.id = options.id;
+    if (options.hn) payload.hn = options.hn;
+  }
+  return cloudPost('delete', payload);
+}
+
 /**
  * Unified Cloud API Interface
  */
@@ -2190,7 +2304,8 @@ export const cloudApi = {
   normalizeClinicConfigAndAdmins,
   verifyStaff,
   trackActivity,
-  flushOfflineQueue
+  flushOfflineQueue,
+  deleteRecord
 };
 
 export default cloudApi;

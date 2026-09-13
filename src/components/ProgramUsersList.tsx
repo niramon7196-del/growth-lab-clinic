@@ -573,6 +573,18 @@ export default function ProgramUsersList({
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm("ต้องการลบรายการนี้ใช่หรือไม่?")) {
+                                onDeletePatient(p.id);
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="ลบข้อมูลการดูแล"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => onSelectPatient(p.id)}
                             className="px-3 py-1.5 bg-purple-50 hover:bg-purple-600 text-purple-700 hover:text-white font-bold text-xs rounded-xl border border-purple-200 hover:border-purple-600 transition-all flex items-center gap-1 shadow-2xs group-hover:bg-purple-600 group-hover:text-white cursor-pointer"
                           >

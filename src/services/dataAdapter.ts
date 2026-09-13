@@ -15,7 +15,7 @@ import {
   Unsubscribe,
   writeBatch 
 } from 'firebase/firestore';
-import { calculateConsistencyMetrics, syncPatientProgress } from '../utils/checkInCalculations';
+import { calculateConsistencyMetrics, syncPatientProgress, formatAppointmentTime } from '../utils/checkInCalculations';
 import { calculateSystemOverviewMetrics, SystemOverviewMetrics } from '../utils/systemSummaryCalculations';
 import { SEED_PATIENTS, SEED_APPOINTMENTS, DEFAULT_SETTINGS, generateSeedLogs } from '../data';
 import { 
@@ -1527,10 +1527,36 @@ export const dataAdapter = {
             patientId: a.HN || a.hn || a.patientId || '',
             patientName: a.PatientName || a.patientName || a.name || 'ผู้รับการดูแล',
             hn: a.HN || a.hn || a.patientId || '',
-            date: a.Date || a.date || new Date().toISOString().split('T')[0],
-            time: a.Time || a.time || '10:00',
+            date: (() => {
+              let rawDate = String(a.Date || a.date || '').trim();
+              if (rawDate.includes('T')) {
+                try {
+                  const d = new Date(rawDate);
+                  if (!isNaN(d.getTime())) {
+                    const bkk = new Intl.DateTimeFormat('en-CA', {
+                      timeZone: 'Asia/Bangkok',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit'
+                    }).format(d);
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(bkk)) return bkk;
+                  }
+                } catch {}
+                rawDate = rawDate.split('T')[0].trim();
+              }
+              if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rawDate)) {
+                const [d, m, y] = rawDate.split('/');
+                rawDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+              }
+              return rawDate || new Date().toISOString().split('T')[0];
+            })(),
+            time: formatAppointmentTime(a.Time || a.time || '10:30'),
             type: a.Type || a.type || 'clinical',
-            dentistName: a.Doctor || a.doctor || a.dentistName || 'ทันตแพทย์หญิง นภาพร วรรณษา',
+            dentistName: (() => {
+              const rawDoc = String(a.Doctor || a.doctor || a.dentistName || '').trim();
+              if (rawDoc.includes('นภาพร')) return 'ทันตแพทย์หญิง นภาพร วรรณษา';
+              return rawDoc || 'ทันตแพทย์หญิง นภาพร วรรณษา';
+            })(),
             notes: a.Notes || a.notes || '',
             status: mappedStatus,
             googleCalendarEventId: a.googleCalendarEventId || a.googleCalendarEventID || a.eventId || undefined,
@@ -1562,9 +1588,9 @@ export const dataAdapter = {
     // 3. Fallback to Local Storage
     try {
       const raw = localStorage.getItem(LOCAL_STORAGE_APPS_KEY);
-      return raw ? JSON.parse(raw) : SEED_APPOINTMENTS;
+      return raw ? JSON.parse(raw) : [];
     } catch {
-      return SEED_APPOINTMENTS;
+      return [];
     }
   },
 
