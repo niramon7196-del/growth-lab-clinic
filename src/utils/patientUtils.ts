@@ -562,7 +562,7 @@ export function createAutoRegisteredPatient(rawHn: string, overrideData?: any): 
     firstName,
     lastName,
     nickname: nickname || firstName,
-    age: payloadData?.age || 10,
+    age: payloadData?.dob ? calculateAgeFromDob(payloadData.dob) : (payloadData?.age || 0),
     gender: payloadData?.gender || 'male',
     weight: payloadData?.weight || 30,
     height: payloadData?.height || 135,
@@ -858,6 +858,7 @@ export function getAllLocalPatients(): Patient[] {
       const isJirayuth = pPhone.includes('7212') || pPhone.includes('0829917212') || p.hn === 'HN-00002' || String(p.id || '').includes('7212');
 
       if (isNiramol && (!p.firstName || p.firstName === 'ผู้รับการดูแล' || p.firstName === 'ไม่ระบุชื่อ' || p.firstName.startsWith('คนไข้ ('))) {
+        const calculatedDob = p.dob || '1989-02-01';
         return {
           ...p,
           firstName: 'นิรมล',
@@ -865,11 +866,12 @@ export function getAllLocalPatients(): Patient[] {
           nickname: p.nickname && !p.nickname.startsWith('คนไข้') ? p.nickname : 'ลูกตาล',
           title: 'คุณ',
           gender: 'หญิง',
-          dob: p.dob || '1989-02-01',
-          age: p.age || 37
+          dob: calculatedDob,
+          age: calculatedDob ? calculateAgeFromDob(calculatedDob) : (p.age || 37)
         };
       }
       if (isJirayuth && (!p.firstName || p.firstName === 'ผู้รับการดูแล' || p.firstName === 'ไม่ระบุชื่อ' || p.firstName.startsWith('คนไข้ ('))) {
+        const calculatedDob = p.dob || '1994-09-16';
         return {
           ...p,
           firstName: 'จิรายุทธ',
@@ -877,8 +879,8 @@ export function getAllLocalPatients(): Patient[] {
           nickname: p.nickname && !p.nickname.startsWith('คนไข้') ? p.nickname : 'โอ๊ต',
           title: 'คุณ',
           gender: 'ชาย',
-          dob: p.dob || '1994-09-16',
-          age: p.age || 32
+          dob: calculatedDob,
+          age: calculatedDob ? calculateAgeFromDob(calculatedDob) : (p.age || 32)
         };
       }
       return p;
@@ -986,31 +988,41 @@ export function findMatchingPatient(
 }
 
 /**
- * Formats HN number to standard short format: "hn001", "hn002", "hn003"...
+ * Formats HN number to standard format: "HN0001", "HN0002", "HN0003"...
  */
 export function formatHN(num: number): string {
   const safeNum = Math.max(1, Math.floor(Number(num) || 1));
-  return `hn${safeNum.toString().padStart(3, '0')}`;
+  return `HN${safeNum.toString().padStart(4, '0')}`;
 }
 
 /**
- * Generates next sequential HN code based on existing patients list ("hn001", "hn002", "hn003"...)
+ * Generates next sequential HN code based on existing patients list ("HN0001", "HN0002", "HN0003"...)
  */
 export function generateNextHN(patientsList: Patient[] = []): string {
   let maxNum = 0;
   if (Array.isArray(patientsList) && patientsList.length > 0) {
     patientsList.forEach(p => {
-      const candidates = [p.hn, p.id];
+      const candidates = [p.hn, p.id, p.qrToken];
       candidates.forEach(cand => {
         if (!cand) return;
-        const matches = String(cand).match(/\d+/g);
-        if (matches && matches.length > 0) {
-          matches.forEach(mStr => {
-            const val = parseInt(mStr, 10);
-            if (!isNaN(val) && val > 0 && val < 1000000) {
-              if (val > maxNum) maxNum = val;
-            }
-          });
+        // Match numbers following HN, hn, or anywhere in the ID
+        const str = String(cand);
+        const hnMatch = str.match(/hn[-_]?(\d+)/i);
+        if (hnMatch && hnMatch[1]) {
+          const val = parseInt(hnMatch[1], 10);
+          if (!isNaN(val) && val > 0 && val < 1000000) {
+            if (val > maxNum) maxNum = val;
+          }
+        } else {
+          const digits = str.match(/\d+/g);
+          if (digits && digits.length > 0) {
+            digits.forEach(dStr => {
+              const val = parseInt(dStr, 10);
+              if (!isNaN(val) && val > 0 && val < 1000000) {
+                if (val > maxNum) maxNum = val;
+              }
+            });
+          }
         }
       });
     });

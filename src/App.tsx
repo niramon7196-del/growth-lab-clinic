@@ -62,7 +62,8 @@ import {
   clearPersistentPatientSession,
   savePersistentPatientSession,
   deduplicatePatientList,
-  deduplicateAppointments
+  deduplicateAppointments,
+  calculateAgeFromDob
 } from './utils/patientUtils';
 import { 
   APP_ENV,
@@ -623,11 +624,15 @@ export default function App() {
               }
             }
             const phone = cleanPhoneString(p.phone || p.parentPhone);
+            const dob = p.dob || (p as any).birthDate || '';
+            const calculatedAge = dob ? calculateAgeFromDob(dob) : (Number(p.age) || 0);
             return {
               ...p,
               firstName,
               nickname: nickname || firstName,
               phone,
+              dob,
+              age: calculatedAge,
               parentPhone: phone || p.parentPhone || '',
               qrToken: p.qrToken || `tok_${p.id}_${(p.hn || 'hn').toLowerCase().replace(/[^a-z0-9]/g, '')}`,
             };
@@ -1163,7 +1168,7 @@ export default function App() {
 
       // 2. Fallback to dataAdapter.listMembers()
       const remoteMembersPromise = dataAdapter.listMembers(true);
-      const timeoutPromise = new Promise<Patient[] | null>((resolve) => setTimeout(() => resolve(null), 3500));
+      const timeoutPromise = new Promise<Patient[] | null>((resolve) => setTimeout(() => resolve(null), 8000));
       const remoteMembers = await Promise.race([remoteMembersPromise, timeoutPromise]);
 
       if (remoteMembers !== null && Array.isArray(remoteMembers)) {
@@ -1250,12 +1255,9 @@ export default function App() {
     };
   }, []);
 
-  // Initial load: prefer immediate local cache to prevent flashing or jumping, sync Google Sheets only if local storage is empty
+  // Initial load: automatically fetch fresh patient data from Google Sheets Web App on mount to ensure live synchronization
   useEffect(() => {
-    const localPatientsStr = localStorage.getItem('growthlab_patients_master') || localStorage.getItem('growth_lab_patients');
-    if (!localPatientsStr || localPatientsStr === '[]' || localPatientsStr.trim() === '') {
-      handleRefreshPatientsFromGoogleSheets(false, true);
-    }
+    handleRefreshPatientsFromGoogleSheets(false, false);
     
     cloudApi.getClinicConfig(getWebhookUrl()).then(res => {
       if (res && res.success && res.data) {

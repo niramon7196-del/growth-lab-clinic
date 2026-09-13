@@ -15,11 +15,8 @@ import {
 
 export { dataRouter, routeAppointmentToGoogleSheets, formatAppointment9Columns, APPOINTMENT_COLUMNS, APPOINTMENT_SHEET_NAME };
 
-export const API_URL = 'https://script.google.com/macros/s/AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc/exec';
-
-
-
-
+export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec';
+export const API_URL = SCRIPT_URL;
 
 export const DEFAULT_WEBHOOK_URL = API_URL;
 
@@ -66,7 +63,9 @@ export function getApiUrl(): string {
         const stored = urlCandidate.trim();
         // Auto-upgrade legacy endpoints to the production API_URL
         if (
-          !stored.includes('AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc') ||
+          !stored.includes('AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv') ||
+          stored.includes('AKfycbvk_1CbD39HQcP8vOXofkPJsyeLOvgKyk608Muk-v4vt4NgUa_Ang73aHpubI04Pbv') ||
+          stored.includes('AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc') ||
           stored.includes('AKfycbwKBK8vNUYLH7sAdM9x') ||
           stored.includes('AKfycbyjMhbe7q3-lQ-AW7KWr3490E1j-de8av3KTyB7v5KQB5NegU0BgCP-XBfwglNPD7dp') ||
           stored.includes('AKfycbyGAHfEkrgkIM5zRpK91VVfMRkWKE4m_nn66DJpavEm-ltTUoKEcaSO1_tUbSR9pqH9') ||
@@ -660,13 +659,22 @@ export function normalizePatientRecord(raw: any, index: number = 0, headerMap?: 
       return String(raw[defaultIdx] ?? '').trim();
     };
 
+    // Positional indices:
+    // Col A (0): hn
+    // Col B (1): name
+    // Col C (2): nickname
+    // Col D (3): gender
+    // Col E (4): age
+    // Col F (5): dob / birthDate
+    // Col G (6): phone
+    // Col H (7): status
     let hnVal = getCell(['hn', 'id', 'patientid', 'รหัส', 'รหัสคนไข้', 'เลขhn', 'เลขประจำตัว'], 0);
     let nameVal = getCell(['name', 'fullname', 'ชื่อนามสกุล', 'ชื่อ', 'ชื่อสกุล', 'ชื่อจริง', 'ชื่อและนามสกุล'], 1);
     let nicknameVal = getCell(['nickname', 'nick_name', 'ชื่อเล่น'], 2);
-    let phoneVal = getCell(['phone', 'tel', 'parentphone', 'เบอร์โทร', 'เบอร์โทรศัพท์', 'เบอร์ติดต่อ', 'เบอร์ผู้ปกครอง'], 3);
-    let genderVal = getCell(['gender', 'sex', 'เพศ'], 4);
-    let ageVal = getCell(['age', 'อายุ'], 5);
-    let dobVal = getCell(['dob', 'birthdate', 'วันเกิด', 'วันเดือนปีเกิด'], 6);
+    let genderVal = getCell(['gender', 'sex', 'เพศ'], 3);
+    let ageVal = getCell(['age', 'อายุ'], 4);
+    let dobVal = getCell(['dob', 'birthdate', 'วันเกิด', 'วันเดือนปีเกิด'], 5);
+    let phoneVal = getCell(['phone', 'tel', 'parentphone', 'เบอร์โทร', 'เบอร์โทรศัพท์', 'เบอร์ติดต่อ', 'เบอร์ผู้ปกครอง'], 6);
     let statusVal = getCell(['status', 'สถานะ', 'สถานะการรักษา'], 7);
 
     // Smart token classification if columns appear shifted or comma-separated
@@ -1137,16 +1145,27 @@ export async function logDaily(
 export async function dailyCheckIn(
   data: {
     hn: string;
-    patientName: string;
+    patientName?: string;
+    score?: string | number;
+    streak?: number;
+    status?: string;
+    [key: string]: any;
   },
   customUrl?: string
 ): Promise<{ success: boolean; visitCount?: number; message?: string; error?: any }> {
   const targetUrl = customUrl || getApiUrl();
-  const normalizedHn = (data.hn || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const rawHn = (data.hn || '').trim();
   const payload = {
-    action: 'dailyCheckIn',
-    hn: normalizedHn,
-    patientName: data.patientName || ''
+    action: 'dailycheckin',
+    altAction: 'dailyCheckIn',
+    hn: rawHn,
+    patientId: rawHn,
+    patientName: data.patientName || '',
+    name: data.patientName || '',
+    score: data.score !== undefined ? data.score : 'สำเร็จ',
+    streak: data.streak || 1,
+    status: data.status || 'completed',
+    timestamp: new Date().toISOString()
   };
 
   try {

@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: any = {
   address: '366/4 ม.1 ตำบลดีลัง อำเภอพัฒนานิคม จังหวัดลพบุรี 15220',
   doctorLicenseNo: 'ท.8482',
   doctorSpecialty: 'ทันตกรรมจัดฟันและการปรับโครงสร้างใบหน้า (Myofunctional Orthodontics)',
-  appsScriptWebhookUrl: 'https://script.google.com/macros/s/AKfycbyGAHfEkrgkIM5zRpK91VVfMRkWKE4m_nn66DJpavEm-ltTUoKEcaSO1_tUbSR9pqH9/exec',
+  appsScriptWebhookUrl: 'https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec',
   defaultBreathingReps: 10,
   defaultVentilationReps: 10,
   defaultTongueReps: 10,

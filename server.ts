@@ -78,23 +78,29 @@ async function startServer() {
       console.log(`[TrackActivity API] Activity: ${record.ประเภท} for HN: ${record.รหัสประจำตัวHN || 'N/A'} (Cut-off 21:00: ${isPast21PM})`);
 
       // Forward to Google Apps Script if APPS_SCRIPT_URL configured
-      const appsScriptUrl = process.env.APPS_SCRIPT_URL;
+      const appsScriptUrl = process.env.APPS_SCRIPT_URL || 
+                            process.env.VITE_GOOGLE_SCRIPT_URL || 
+                            'https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec';
       if (appsScriptUrl) {
         try {
           fetch(appsScriptUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
-              action: 'logDaily',
+              action: 'dailycheckin',
+              altAction: 'logDaily',
               sheetName: 'Daily_Logs',
               targetSheet: 'Daily_Logs',
               timestamp: new Date().toISOString(),
+              hn: record.รหัสประจำตัวHN,
               HN: record.รหัสประจำตัวHN,
               patientName: record.ชื่อผู้รับการดูแล,
+              score: record.คะแนนความสม่ำเสมอ || 100,
+              streak: 1,
+              status: record.สถานะสำเร็จ ? 'completed' : 'pending',
               date: record.วันที่,
               time: record.เวลา,
               type: record.ประเภท,
-              status: record.สถานะสำเร็จ ? 'สำเร็จ' : 'ยังไม่เสร็จ',
               notes: record.หมายเหตุ,
               payload: record
             })

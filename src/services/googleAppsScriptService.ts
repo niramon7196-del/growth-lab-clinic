@@ -1,5 +1,5 @@
 import { parseAndCleanAssignedTasks, sanitizeTaskCode } from '../utils/cleanTasks';
-import { detectGenderFromPatientData } from '../utils/patientUtils';
+import { detectGenderFromPatientData, formatHN, calculateAgeFromDob } from '../utils/patientUtils';
 import { 
   routeAppointmentToGoogleSheets, 
   dataRouter, 
@@ -16,7 +16,8 @@ export { dataRouter, routeAppointmentToGoogleSheets, formatAppointment9Columns, 
  */
 
 // 1. Central API Endpoint for Google Apps Script Web App
-export const API_URL = 'https://script.google.com/macros/s/AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc/exec';
+export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec';
+export const API_URL = SCRIPT_URL;
 export const CHECKIN_BASE_URL = API_URL;
 export const DEFAULT_WEBHOOK_URL = API_URL;
 
@@ -28,9 +29,11 @@ export function getWebhookUrl(): string {
       const urlCandidate = parsed.appsScriptWebhookUrl || parsed.webhookUrl || parsed.gasWebhookUrl;
       if (urlCandidate && typeof urlCandidate === 'string' && urlCandidate.trim() !== '') {
         const stored = urlCandidate.trim();
-        // If it still points to the old apps script url, migrate it to the current master API_URL
+        // If it still points to older apps script urls, migrate it to the current master SCRIPT_URL
         if (
-          !stored.includes('AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc') ||
+          !stored.includes('AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv') ||
+          stored.includes('AKfycbvk_1CbD39HQcP8vOXofkPJsyeLOvgKyk608Muk-v4vt4NgUa_Ang73aHpubI04Pbv') ||
+          stored.includes('AKfycbwwG3zgIjm11hxw2B971OkOgmnQ1gPGareMVCUBplGcU3MwLLCXxMFgjD0B604ccaJc') ||
           stored.includes('AKfycbwKBK8vNUYLH7sAdM9x') ||
           stored.includes('AKfycbwFdmRIkDUI9NiyjlPS0RP57qh3jrBXfPv2d6ADhMiFk_MPpp1lk7EcVd4b0hREBipP') ||
           stored.includes('AKfycbyjMhbe7q3-lQ-AW7KWr3490E1j-de8av3KTyB7v5KQB5NegU0BgCP-XBfwglNPD7dp') ||
@@ -40,9 +43,9 @@ export function getWebhookUrl(): string {
           stored.includes('AKfycbxbeCUHofRicOS2UeDoUSUcykhYteTr-ze9pWWxrhqAYPvg6vLNyGYIbb_sQAzi4b4c') ||
           stored.includes('AKfycbxp6wt5DxDbO0wmsPDUN6zKOxRQvdR0Lt1GAAhlN-rm88wQFH_sdG_vhXbPG20i-FKZ')
         ) {
-          parsed.appsScriptWebhookUrl = API_URL;
+          parsed.appsScriptWebhookUrl = SCRIPT_URL;
           localStorage.setItem('growth_lab_settings', JSON.stringify(parsed));
-          return API_URL;
+          return SCRIPT_URL;
         }
         return stored;
       }
@@ -50,18 +53,18 @@ export function getWebhookUrl(): string {
   } catch (e) {
     console.warn('[googleAppsScriptService] Error reading settings:', e);
   }
-  return API_URL;
+  return SCRIPT_URL;
 }
 
 /**
- * 1. Save Patient to Google Sheets (action: 'savePatient')
+ * 1. Save / Register Patient to Google Sheets (actions: 'registerPatient' and 'savePatient')
  * Live Cloud Sync: POST to Google Apps Script Web App with text/plain;charset=utf-8 headers.
  */
 export async function savePatientToGoogleSheets(
   patient: any,
   webhookUrl?: string
 ): Promise<{ success: boolean; data?: any; error?: any }> {
-  const targetUrl = webhookUrl || getWebhookUrl() || API_URL;
+  const targetUrl = webhookUrl || getWebhookUrl() || SCRIPT_URL;
   if (!targetUrl) {
     console.warn('[googleAppsScriptService] No webhook URL provided for patient save.');
     return { success: false, error: 'No webhook URL' };
@@ -71,10 +74,25 @@ export async function savePatientToGoogleSheets(
     const fn = (patient.firstName || '').toString().trim();
     const ln = (patient.lastName || '').toString().trim();
     const fullName = (patient.name || `${fn} ${ln}`.trim() || patient.nickname || patient.hn || '').toString().trim() || '-';
-    const hn = (patient.hn || patient.id || '').toString().trim() || '-';
+    
+    // Normalize HN format (e.g. "HN0001")
+    let rawHn = (patient.hn || patient.id || '').toString().trim();
+    let hn = rawHn;
+    if (rawHn && rawHn !== '-') {
+      const match = rawHn.match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (!isNaN(num) && num > 0) {
+          hn = formatHN(num);
+        }
+      }
+    }
+    if (!hn || hn === '-') hn = 'HN0001';
+
     const nickname = (patient.nickname || '').toString().trim() || '-';
-    const gender = (patient.gender || detectGenderFromPatientData(patient) || 'ชาย').toString().trim() || '-';
+    const gender = (patient.gender || detectGenderFromPatientData(patient) || 'ชาย').toString().trim() || 'ชาย';
     const birthDate = (patient.birthDate || patient.dob || '').toString().trim() || '-';
+    const calculatedAge = birthDate && birthDate !== '-' ? calculateAgeFromDob(birthDate) : (Number(patient.age) || 0);
     const phone = (patient.phone || patient.parentPhone || patient.tel || '').toString().trim() || '-';
     
     // Extract assigned tasks list formatted cleanly for Google Sheets
@@ -87,24 +105,42 @@ export async function savePatientToGoogleSheets(
       assignedTasksStr = patient.assignedExercises.join(', ');
     }
 
-    const status = (patient.status && String(patient.status).toLowerCase() === 'active') ? 'Active' : (patient.status ? String(patient.status) : 'Active');
+    const status = (patient.status && String(patient.status).toLowerCase() === 'active') ? 'active' : (patient.status ? String(patient.status) : 'active');
 
     const requestBody = {
-      action: 'savePatient',
+      action: 'registerPatient',
+      altAction: 'savePatient',
       sheetName: 'Patients',
+      hn,
+      patientName: fullName,
+      name: fullName,
+      nickname,
+      gender,
+      birthDate,
+      dob: birthDate,
+      age: calculatedAge,
+      phone,
+      status,
+      assignedTasks: assignedTasksStr,
+      notes: (patient.notes || '').toString().trim() || '-',
+      weight: patient.weight || '-',
+      height: patient.height || '-',
+      startDate: patient.startDate || new Date().toISOString().split('T')[0],
       payload: {
         hn,
         name: fullName,
+        patientName: fullName,
         nickname,
         gender,
         birthDate,
+        dob: birthDate,
+        age: calculatedAge,
         phone,
         assignedTasks: assignedTasksStr,
         status,
         notes: (patient.notes || '').toString().trim() || '-',
         weight: patient.weight || '-',
         height: patient.height || '-',
-        age: patient.age || '-',
         startDate: patient.startDate || new Date().toISOString().split('T')[0]
       }
     };
@@ -132,7 +168,7 @@ export async function savePatientToGoogleSheets(
       resData = { status: 'success', note: 'POST sent (no-cors mode)' };
     }
 
-    console.log('[googleAppsScriptService] savePatient successfully synced to Google Sheets:', hn, resData);
+    console.log('[googleAppsScriptService] registerPatient successfully synced to Google Sheets:', hn, resData);
     return { success: true, data: resData };
   } catch (error) {
     console.error('[googleAppsScriptService] Failed to save patient to Google Sheets:', error);
@@ -169,6 +205,7 @@ export function normalizeApiPatient(raw: any): any {
     nickname
   });
   const birthDate = raw.birthDate ? (String(raw.birthDate).includes('T') ? String(raw.birthDate).split('T')[0] : String(raw.birthDate)) : (raw.dob || '');
+  const calculatedAge = birthDate ? calculateAgeFromDob(birthDate) : (Number(raw.age) || 0);
 
   const assignedTasks: string[] = parseAndCleanAssignedTasks(raw.assignedTasks || raw.assignedExercises || raw.AssignedTasks);
 
@@ -193,6 +230,7 @@ export function normalizeApiPatient(raw: any): any {
     gender,
     birthDate,
     dob: birthDate,
+    age: calculatedAge,
     phone,
     parentPhone: phone,
     assignedTasks,
@@ -398,14 +436,14 @@ export function extractPatientsListFromResponse(data: any): any[] {
         headers.forEach((h: string, i: number) => {
           if (h) obj[h] = row[i];
         });
-        // Positional fallbacks matching exact columns: Col A = hn, Col B = name, Col C = nickname, Col D = gender, Col E = birthDate, Col F = phone, Col G = assignedTasks, Col H = status
+        // Positional fallbacks matching exact columns: Col A = hn, Col B = name, Col C = nickname, Col D = gender, Col E = age, Col F = birthDate, Col G = phone, Col H = status
         if (!obj.hn && row[0] !== undefined) obj.hn = row[0];
         if (!obj.name && row[1] !== undefined) obj.name = row[1];
         if (!obj.nickname && row[2] !== undefined) obj.nickname = row[2];
         if (!obj.gender && row[3] !== undefined) obj.gender = row[3];
-        if (!obj.birthDate && row[4] !== undefined) obj.birthDate = row[4];
-        if (!obj.phone && row[5] !== undefined) obj.phone = row[5];
-        if (!obj.assignedTasks && row[6] !== undefined) obj.assignedTasks = row[6];
+        if (!obj.age && row[4] !== undefined) obj.age = row[4];
+        if (!obj.birthDate && row[5] !== undefined) obj.birthDate = row[5];
+        if (!obj.phone && row[6] !== undefined) obj.phone = row[6];
         if (!obj.status && row[7] !== undefined) obj.status = row[7];
         return obj;
       }).filter((item: any) => Object.keys(item).length > 0);
@@ -469,7 +507,7 @@ export async function fetchPatientsFromGoogleSheets(
 
   for (const action of actionsToTry) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
       const url = new URL(targetUrl);
       url.searchParams.set('action', action);
@@ -477,6 +515,10 @@ export async function fetchPatientsFromGoogleSheets(
 
       const res = await fetch(url.toString(), {
         method: 'GET',
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json, text/plain, */*'
+        },
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -495,6 +537,8 @@ export async function fetchPatientsFromGoogleSheets(
             } catch {}
           }
         }
+
+        console.log(`Fetched Patients (action=${action}):`, parsedData);
 
         if (parsedData !== null && parsedData !== undefined) {
           const list = extractPatientsListFromResponse(parsedData);
@@ -623,7 +667,7 @@ export async function fetchPatientPlanFromGoogleSheets(
 }
 
 /**
- * 6. Sync Homework & Exercise completion scores back to Google Sheets (action: 'saveExercise')
+ * 6. Sync Homework & Exercise completion scores back to Google Sheets (action: 'submitExercise')
  */
 export async function syncHomeworkToGoogleSheets(
   webhookUrl: string,
@@ -640,25 +684,35 @@ export async function syncHomeworkToGoogleSheets(
     [key: string]: any;
   }
 ) {
-  const targetUrl = webhookUrl || getWebhookUrl();
+  const targetUrl = webhookUrl || getWebhookUrl() || SCRIPT_URL;
   if (!targetUrl) {
     console.warn('[googleAppsScriptService] No webhook URL provided.');
     return;
   }
 
   try {
+    const rawHn = payload.hn || payload.patientId || '';
+    let formattedHn = rawHn;
+    const match = rawHn.match(/\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      if (!isNaN(num) && num > 0) {
+        formattedHn = formatHN(num);
+      }
+    }
+
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8',
       },
       body: JSON.stringify({
-        action: 'saveExercise',
+        action: 'submitExercise',
+        altAction: 'saveExercise',
         sheetName: 'Exercise_Logs',
-        altAction: 'SAVE_DAILY_SUMMARY',
         timestamp: new Date().toISOString(),
-        hn: payload.hn || payload.patientId || '',
-        patientId: payload.patientId || payload.hn || '',
+        hn: formattedHn,
+        patientId: formattedHn,
         exerciseId: (payload.completedExercises && payload.completedExercises[0]) || 'omt_exercise',
         durationSec: payload.durationSec || 300,
         reps: payload.reps || 10,
@@ -666,14 +720,14 @@ export async function syncHomeworkToGoogleSheets(
         satisfaction: payload.satisfaction || 5,
         status: payload.status || 'completed',
         patientName: payload.patientName || payload.name || '',
-        exerciseTitle: payload.exerciseTitle || 'ส่งการบ้านสรุปผลประจำวัน (SAVE_DAILY_SUMMARY)',
+        exerciseTitle: payload.exerciseTitle || 'ส่งการบ้านสรุปผลประจำวัน',
         payload,
         ...payload
       }),
       mode: 'no-cors'
     });
 
-    console.log('[googleAppsScriptService] Exercise scores submitted to Google Sheets:', payload.hn);
+    console.log('[googleAppsScriptService] Exercise scores submitted to Google Sheets:', formattedHn);
     return response;
   } catch (error) {
     console.error('[googleAppsScriptService] Failed to sync homework:', error);
@@ -809,35 +863,57 @@ export async function syncSleepEfToGoogleSheets(
 }
 
 /**
- * 9. Sync Daily Check-in to Google Sheets (action: 'logDaily')
+ * 9. Sync Daily Check-in to Google Sheets (action: 'dailycheckin')
  */
 export async function syncDailyCheckInToGoogleSheets(
   webhookUrl: string,
   payload: {
     patientId: string;
     hn?: string;
+    patientName?: string;
+    name?: string;
+    score?: string | number;
+    streak?: number;
+    status?: string;
     action?: string;
     actionName?: string;
-    score?: string;
-    status?: string;
     [key: string]: any;
   }
 ) {
-  const targetUrl = webhookUrl || getWebhookUrl();
+  const targetUrl = webhookUrl || getWebhookUrl() || SCRIPT_URL;
   if (!targetUrl) return;
 
   try {
+    const rawHn = payload.hn || payload.patientId || '';
+    let formattedHn = rawHn;
+    const match = rawHn.match(/\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      if (!isNaN(num) && num > 0) {
+        formattedHn = formatHN(num);
+      }
+    }
+
+    const patientName = payload.patientName || payload.name || payload.fullName || '';
+    const streak = typeof payload.streak === 'number' ? payload.streak : (payload.streakDays ?? payload.currentStreak ?? 1);
+    const score = payload.score !== undefined ? payload.score : 'สำเร็จ';
+    const status = payload.status || 'completed';
+
     const bodyData = {
-      action: 'logDaily',
+      action: 'dailycheckin',
+      altAction: 'dailyCheckIn',
       sheetName: 'Daily_Logs',
-      altAction: payload.action || 'เช็คอินประจำวัน (Daily Check-in)',
+      hn: formattedHn,
+      patientId: formattedHn,
+      patientName: patientName,
+      name: patientName,
+      score: score,
+      streak: streak,
+      status: status,
       actionName: payload.actionName || 'เช็คอินประจำวัน (Daily Check-in)',
-      patientId: payload.patientId || payload.hn || '',
-      hn: payload.hn || payload.patientId || '',
-      score: payload.score || 'สำเร็จ',
-      status: payload.status || 'completed',
       timestamp: new Date().toISOString(),
-      patientName: payload.patientName || payload.name || '',
+      date: payload.date || new Date().toISOString().split('T')[0],
+      time: payload.time || new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       exerciseId: payload.exerciseId || payload.action || 'daily_checkin',
       exerciseTitle: payload.exerciseTitle || payload.actionName || 'เช็คอินประจำวัน (Daily Check-in)',
       durationSec: payload.durationSec || 0,
@@ -856,7 +932,14 @@ export async function syncDailyCheckInToGoogleSheets(
       mode: 'no-cors'
     });
 
-    console.log('[googleAppsScriptService] Daily check-in logged to Google Sheets:', bodyData.hn || bodyData.patientId);
+    console.log('[googleAppsScriptService] Daily check-in logged to Google Sheets:', formattedHn, {
+      action: 'dailycheckin',
+      hn: formattedHn,
+      patientName,
+      score,
+      streak,
+      status
+    });
     return response;
   } catch (error) {
     console.error('[googleAppsScriptService] Failed to sync check-in to Google Sheets:', error);

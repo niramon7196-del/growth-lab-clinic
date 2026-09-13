@@ -427,7 +427,7 @@ export default function PatientFormModal({
                         required
                         value={formData.hn}
                         onChange={(e) => setFormData({ ...formData, hn: e.target.value })}
-                        placeholder="ตัวอย่าง HN-00001"
+                        placeholder="ตัวอย่าง HN0001"
                         className="w-full p-2.5 sm:p-3 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs sm:text-sm font-bold text-slate-900 focus:ring-2 focus:ring-purple-500/20 focus:bg-white transition-all"
                       />
                     </div>

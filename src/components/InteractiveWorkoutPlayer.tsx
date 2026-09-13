@@ -98,6 +98,7 @@ export default function InteractiveWorkoutPlayer({
   const [timerSeconds, setTimerSeconds] = useState<number>(0);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const [isDone, setIsDone] = useState<boolean>(isCompletedToday);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [userNotes, setUserNotes] = useState<string>('');
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
 
@@ -247,89 +248,94 @@ export default function InteractiveWorkoutPlayer({
     setParticipantVideoUrl(undefined);
   };
 
-  const handleSaveAndComplete = () => {
-    if (isLockedToday) return;
+  const handleSaveAndComplete = async () => {
+    if (isLockedToday || isSubmitting) return;
+    setIsSubmitting(true);
 
-    const finalReps = Math.max(1, repsDone || targetReps);
-    const endNowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const mins = Math.floor(timerSeconds / 60);
-    const secs = timerSeconds % 60;
-    const durationText = mins > 0 ? `${mins} นาที ${secs} วินาที` : `${secs} วินาที`;
+    try {
+      const finalReps = Math.max(1, repsDone || targetReps);
+      const endNowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const mins = Math.floor(timerSeconds / 60);
+      const secs = timerSeconds % 60;
+      const durationText = mins > 0 ? `${mins} นาที ${secs} วินาที` : `${secs} วินาที`;
 
-    setSessionEndTime(endNowTime);
-    setRepsDone(finalReps);
-    setIsDone(true);
-    setIsTimerRunning(false);
-    setShowSuccessToast(true);
-    playSuccessChime();
+      setSessionEndTime(endNowTime);
+      setRepsDone(finalReps);
+      setIsDone(true);
+      setIsTimerRunning(false);
+      setShowSuccessToast(true);
+      playSuccessChime();
 
-    // Log completion to Google Sheets Daily_Logs with start/end time and duration
-    if (patient) {
-      logExerciseSession({
-        hn: patient.hn || patient.id,
-        patientId: patient.id,
-        patientName: `${patient.firstName} ${patient.lastName || ''}`.trim() || patient.nickname,
-        exerciseId: exercise.id,
-        exerciseTitle: exercise.title,
-        status: 'สำเร็จ (Completed)',
-        startTime: sessionStartTime || startTimeRef.current,
-        endTime: endNowTime,
-        durationSeconds: timerSeconds,
-        durationText: durationText,
-        reps: finalReps,
-        score: 100,
-        notes: userNotes || ''
-      }).catch(err => console.warn('[InteractiveWorkoutPlayer] logExerciseSession complete error:', err));
-    }
+      // Log completion to Google Sheets Daily_Logs with start/end time and duration
+      if (patient) {
+        await logExerciseSession({
+          hn: patient.hn || patient.id,
+          patientId: patient.id,
+          patientName: `${patient.firstName} ${patient.lastName || ''}`.trim() || patient.nickname,
+          exerciseId: exercise.id,
+          exerciseTitle: exercise.title,
+          status: 'สำเร็จ (Completed)',
+          startTime: sessionStartTime || startTimeRef.current,
+          endTime: endNowTime,
+          durationSeconds: timerSeconds,
+          durationText: durationText,
+          reps: finalReps,
+          score: 100,
+          notes: userNotes || ''
+        }).catch(err => console.warn('[InteractiveWorkoutPlayer] logExerciseSession complete error:', err));
+      }
 
-    const assessmentPayload: WorkoutAssessmentData = {
-      softLanding,
-      kneeAlignment,
-      trunkControl,
-      tonguePosture,
-      lipSeal,
-      nasalBreathing,
-      wearTimeSufficient,
-      deviceCleaned,
-      height: heightInput ? Number(heightInput) : undefined,
-      painFree,
-      needsImprovement,
-      needsImprovementNote: improvementNote,
-      painPresent,
-      painLocations: selectedPainLocations,
-      painScore: painPresent ? painScore : 0
-    };
+      const assessmentPayload: WorkoutAssessmentData = {
+        softLanding,
+        kneeAlignment,
+        trunkControl,
+        tonguePosture,
+        lipSeal,
+        nasalBreathing,
+        wearTimeSufficient,
+        deviceCleaned,
+        height: heightInput ? Number(heightInput) : undefined,
+        painFree,
+        needsImprovement,
+        needsImprovementNote: improvementNote,
+        painPresent,
+        painLocations: selectedPainLocations,
+        painScore: painPresent ? painScore : 0
+      };
 
-    if (isFinalStep && onRequestFinalConfirm) {
-      // Prompt final confirmation modal from parent
-      onRequestFinalConfirm();
-      setShowSuccessToast(false);
-      return;
-    }
-
-    if (onComplete) {
-      onComplete(
-        exercise.id, 
-        finalReps, 
-        timerSeconds, 
-        userNotes, 
-        assessmentPayload, 
-        participantVideoUrl
-      );
-    }
-
-    if (hasNextStep && onNextStep) {
-      setTimeout(() => {
+      if (isFinalStep && onRequestFinalConfirm) {
+        // Prompt final confirmation modal from parent
+        onRequestFinalConfirm();
         setShowSuccessToast(false);
-        onNextStep();
-      }, 500);
-    } else {
-      setTimeout(() => {
-        setShowSuccessToast(false);
-        if (onBack) {
-          onBack();
-        }
-      }, 1200);
+        return;
+      }
+
+      if (onComplete) {
+        onComplete(
+          exercise.id, 
+          finalReps, 
+          timerSeconds, 
+          userNotes, 
+          assessmentPayload, 
+          participantVideoUrl
+        );
+      }
+
+      if (hasNextStep && onNextStep) {
+        setTimeout(() => {
+          setShowSuccessToast(false);
+          onNextStep();
+        }, 500);
+      } else {
+        setTimeout(() => {
+          setShowSuccessToast(false);
+          if (onBack) {
+            onBack();
+          }
+        }, 1200);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -949,20 +955,40 @@ export default function InteractiveWorkoutPlayer({
                 ) : hasNextStep ? (
                   <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={handleSaveAndComplete}
-                    className="w-full py-4 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-600 hover:from-purple-700 hover:via-indigo-700 hover:to-teal-700"
+                    className="w-full py-4 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-600 hover:from-purple-700 hover:via-indigo-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Check className="w-5 h-5 stroke-[3]" />
-                    <span>ทำสำเร็จ (Complete) & ไปท่าถัดไป</span>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>กำลังบันทึก...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-5 h-5 stroke-[3]" />
+                        <span>ทำสำเร็จ (Complete) & ไปท่าถัดไป</span>
+                      </>
+                    )}
                   </button>
                 ) : (
                   <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={handleSaveAndComplete}
-                    className="w-full py-4 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 bg-gradient-to-r from-emerald-600 via-teal-600 to-purple-600 hover:from-emerald-700 hover:via-teal-700 hover:to-purple-700"
+                    className="w-full py-4 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 bg-gradient-to-r from-emerald-600 via-teal-600 to-purple-600 hover:from-emerald-700 hover:via-teal-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Check className="w-5 h-5 stroke-[3]" />
-                    <span>บันทึกและส่งผล (Submit)</span>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>กำลังบันทึกและส่งผล...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-5 h-5 stroke-[3]" />
+                        <span>บันทึกและส่งผล (Submit)</span>
+                      </>
+                    )}
                   </button>
                 )}
                 

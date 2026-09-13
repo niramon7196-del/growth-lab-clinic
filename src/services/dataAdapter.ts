@@ -321,13 +321,22 @@ export function mapRawGoogleSheetRowToPatient(
       return null;
     }
 
+    // Column mapping:
+    // Col A (0): hn
+    // Col B (1): name (fullName / firstName + lastName)
+    // Col C (2): nickname
+    // Col D (3): gender
+    // Col E (4): age
+    // Col F (5): birthDate / dob (YYYY-MM-DD or DD/MM/YYYY)
+    // Col G (6): phone
+    // Col H (7): status
     let hnVal = String(raw[0] ?? '').trim();
     let nameVal = String(raw[1] ?? '').trim();
     let nicknameVal = String(raw[2] ?? '').trim();
-    let phoneVal = String(raw[3] ?? '').trim();
-    let genderVal = String(raw[4] ?? '').trim();
-    let ageVal = raw[5];
-    let dobVal = String(raw[6] ?? '').trim();
+    let genderVal = String(raw[3] ?? '').trim();
+    let ageVal = raw[4];
+    let dobVal = String(raw[5] ?? '').trim();
+    let phoneVal = String(raw[6] ?? '').trim();
     let statusVal = String(raw[7] ?? '').trim();
 
     // Auto-detect if columns were shifted
@@ -902,7 +911,7 @@ export const dataAdapter = {
     // 1. Fetch Patient List exclusively from Google Sheets Web App Endpoint
     try {
       const initialDataPromise = fetchInitialDataFromGoogleSheets();
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
 
       const initialData = await Promise.race([initialDataPromise, timeoutPromise]);
       const gsPatients = initialData?.patients !== undefined ? initialData.patients : await Promise.race([

@@ -53,13 +53,22 @@ export function formatAppointment9Columns(appointment: any): {
   ).toString().trim();
 
   // 2. HN
-  const patHn = (
+  let patHn = (
     appointment.hn || 
     appointment.HN || 
     appointment.patientHn || 
     appointment.patientId || 
     ''
   ).toString().trim();
+  if (patHn) {
+    const match = patHn.match(/\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      if (!isNaN(num) && num > 0) {
+        patHn = `HN${num.toString().padStart(4, '0')}`;
+      }
+    }
+  }
 
   // 3. PatientName
   let patName = (

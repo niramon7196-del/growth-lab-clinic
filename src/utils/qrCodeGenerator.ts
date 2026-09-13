@@ -82,7 +82,7 @@ export function encodePayloadForQR(patient?: Partial<Patient> | null): string {
 /**
  * Official Central API Endpoint for Google Apps Script Web App
  */
-export const API_URL = "https://script.google.com/macros/s/AKfycbyGAHfEkrgkIM5zRpK91VVfMRkWKE4m_nn66DJpavEm-ltTUoKEcaSO1_tUbSR9pqH9/exec";
+export const API_URL = "https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec";
 export const CHECKIN_BASE_URL = API_URL;
 
 export const NETLIFY_BASE_URL = "https://growth-lab-28.vercel.app";

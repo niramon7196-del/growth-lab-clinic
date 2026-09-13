@@ -184,7 +184,9 @@ export async function getDailySummaryFromDB(
  * ส่งข้อมูลออกไปยัง Google Apps Script Web App
  */
 async function sendToGoogleAppsScript(payload: Record<string, any>) {
-  const appsScriptUrl = process.env.APPS_SCRIPT_URL || process.env.VITE_GOOGLE_SCRIPT_URL;
+  const appsScriptUrl = process.env.APPS_SCRIPT_URL || 
+                        process.env.VITE_GOOGLE_SCRIPT_URL || 
+                        'https://script.google.com/macros/s/AKfycbyk_1CbD39HQcP8vOXofkPJsYeLOvgklYk608MuK-v4vt4NgUa_Ang73AHpubIO4Pbv/exec';
   
   if (!appsScriptUrl) {
     console.warn('[Vercel Serverless] APPS_SCRIPT_URL is not defined in environment variables.');

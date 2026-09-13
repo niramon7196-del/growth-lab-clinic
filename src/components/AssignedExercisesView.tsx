@@ -96,6 +96,7 @@ export default function AssignedExercisesView({
   }, [initialStage, patient.id]);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [showFinalConfirmModal, setShowFinalConfirmModal] = useState<boolean>(false);
+  const [isSubmittingFinal, setIsSubmittingFinal] = useState<boolean>(false);
   const [showHabitScoreModal, setShowHabitScoreModal] = useState<boolean>(false);
   const [habitScoreData, setHabitScoreData] = useState<{
     score: number;
@@ -373,60 +374,67 @@ export default function AssignedExercisesView({
     };
   };
 
-  const handleFinalConfirmSubmit = () => {
-    // Complete all assignments
-    const newCompleted: Record<string, boolean> = { ...completedMap };
-    assignedItems.forEach(item => {
-      newCompleted[item.assignment.id] = true;
-      if (onCompleteExercise) {
-        onCompleteExercise(item.assignment.id);
-      }
-    });
-    setCompletedMap(newCompleted);
+  const handleFinalConfirmSubmit = async () => {
+    if (isSubmittingFinal) return;
+    setIsSubmittingFinal(true);
 
     try {
-      localStorage.setItem(`growth_completed_exercises_${patient.id}_${todayStr}`, JSON.stringify(newCompleted));
-      localStorage.setItem(`growth_completed_assignments_${patient.id}_${todayStr}`, JSON.stringify(newCompleted));
-      localStorage.setItem(`growth_locked_days_${patient.id}_${todayStr}`, 'true');
-    } catch (e) {
-      console.error(e);
+      // Complete all assignments
+      const newCompleted: Record<string, boolean> = { ...completedMap };
+      assignedItems.forEach(item => {
+        newCompleted[item.assignment.id] = true;
+        if (onCompleteExercise) {
+          onCompleteExercise(item.assignment.id);
+        }
+      });
+      setCompletedMap(newCompleted);
+
+      try {
+        localStorage.setItem(`growth_completed_exercises_${patient.id}_${todayStr}`, JSON.stringify(newCompleted));
+        localStorage.setItem(`growth_completed_assignments_${patient.id}_${todayStr}`, JSON.stringify(newCompleted));
+        localStorage.setItem(`growth_locked_days_${patient.id}_${todayStr}`, 'true');
+      } catch (e) {
+        console.error(e);
+      }
+
+      setIsLockedToday(true);
+      const scoreData = calculateHabitScore();
+      setHabitScoreData(scoreData);
+      setShowFinalConfirmModal(false);
+      setSelectedExercise(null);
+      setShowHabitScoreModal(true);
+
+      // Call Google Apps Script Webhook
+      const webhookUrl = getWebhookUrl();
+      const completedTitles = assignedItems.map(i => i.exercise.title).join(', ');
+
+      await syncHomeworkToGoogleSheets(webhookUrl, {
+        hn: patient.hn || '',
+        patientId: patient.id,
+        date: todayStr,
+        omtScore: scoreData.score,
+        exerciseScore: scoreData.score,
+        sleepStatus: 'COMPLETED',
+        nutritionStatus: 'COMPLETED',
+        videoLink: patient.assignments?.find(a => a.videoUrl)?.videoUrl || '',
+        completedExercises: assignedItems.map(i => i.exercise.id)
+      }).catch(e => console.error('[AssignedExercisesView] webhook error:', e));
+
+      await logExerciseSession({
+        hn: patient.hn || patient.id,
+        patientId: patient.id,
+        patientName: `${patient.firstName} ${patient.lastName || ''}`.trim() || patient.nickname,
+        exerciseId: 'all_homework_completed',
+        exerciseTitle: `ทำการบ้านประจำวันครบทุกด่าน (${assignedItems.length} กิจกรรม: ${completedTitles})`,
+        status: 'สำเร็จ (Completed)',
+        startTime: '',
+        score: scoreData.score,
+        reps: assignedItems.length,
+        notes: `เกรด: ${scoreData.grade}, ความต่อเนื่อง: ${scoreData.streakDays} วัน`
+      }).catch(err => console.warn('[AssignedExercisesView] logExerciseSession complete error:', err));
+    } finally {
+      setIsSubmittingFinal(false);
     }
-
-    setIsLockedToday(true);
-    const scoreData = calculateHabitScore();
-    setHabitScoreData(scoreData);
-    setShowFinalConfirmModal(false);
-    setSelectedExercise(null);
-    setShowHabitScoreModal(true);
-
-    // Call Google Apps Script Webhook
-    const webhookUrl = getWebhookUrl();
-    const completedTitles = assignedItems.map(i => i.exercise.title).join(', ');
-
-    syncHomeworkToGoogleSheets(webhookUrl, {
-      hn: patient.hn || '',
-      patientId: patient.id,
-      date: todayStr,
-      omtScore: scoreData.score,
-      exerciseScore: scoreData.score,
-      sleepStatus: 'COMPLETED',
-      nutritionStatus: 'COMPLETED',
-      videoLink: patient.assignments?.find(a => a.videoUrl)?.videoUrl || '',
-      completedExercises: assignedItems.map(i => i.exercise.id)
-    }).catch(e => console.error('[AssignedExercisesView] webhook error:', e));
-
-    logExerciseSession({
-      hn: patient.hn || patient.id,
-      patientId: patient.id,
-      patientName: `${patient.firstName} ${patient.lastName || ''}`.trim() || patient.nickname,
-      exerciseId: 'all_homework_completed',
-      exerciseTitle: `ทำการบ้านประจำวันครบทุกด่าน (${assignedItems.length} กิจกรรม: ${completedTitles})`,
-      status: 'สำเร็จ (Completed)',
-      startTime: '',
-      score: scoreData.score,
-      reps: assignedItems.length,
-      notes: `เกรด: ${scoreData.grade}, ความต่อเนื่อง: ${scoreData.streakDays} วัน`
-    }).catch(err => console.warn('[AssignedExercisesView] logExerciseSession complete error:', err));
   };
 
   return (
@@ -690,10 +698,18 @@ export default function AssignedExercisesView({
                 </button>
                 <button
                   type="button"
+                  disabled={isSubmittingFinal}
                   onClick={handleFinalConfirmSubmit}
-                  className="py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-purple-600 text-white font-black text-xs shadow-lg hover:from-emerald-700 hover:to-purple-700 transition-all cursor-pointer min-h-[44px] flex items-center justify-center"
+                  className="py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-purple-600 text-white font-black text-xs shadow-lg hover:from-emerald-700 hover:to-purple-700 transition-all cursor-pointer min-h-[44px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed gap-2"
                 >
-                  ✓ ยืนยันบันทึกผล
+                  {isSubmittingFinal ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>กำลังบันทึกผล...</span>
+                    </>
+                  ) : (
+                    <span>✓ ยืนยันบันทึกผล</span>
+                  )}
                 </button>
               </div>
             </motion.div>
