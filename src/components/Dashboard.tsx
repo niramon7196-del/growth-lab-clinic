@@ -1636,7 +1636,7 @@ export default function Dashboard({
               </div>
 
               <div className="overflow-y-auto space-y-2 flex-1 pr-1">
-                {patients.map(p => {
+                {(patients || []).map(p => {
                   const info = formatPatientDisplay(p);
                   const cleanPhone = cleanPhoneString(p.phone || p.parentPhone);
                   return (
@@ -1708,12 +1708,12 @@ export default function Dashboard({
                   onChange={(e) => {
                     const nextId = e.target.value;
                     setAssignTargetPatientId(nextId);
-                    const pat = patients.find(p => p.id === nextId);
-                    setSelectedExerciseIds((pat?.assignments || []).map(a => a.exerciseId));
+                    const pat = (patients || []).find(p => p.id === nextId);
+                    setSelectedExerciseIds(((pat?.assignments) || []).map(a => a.exerciseId));
                   }}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
                 >
-                  {patients.map(p => {
+                  {(patients || []).map(p => {
                     const info = formatPatientDisplay(p);
                     return (
                       <option key={p.id} value={p.id} className="bg-white text-slate-900">

@@ -25,13 +25,13 @@ export default function PatientContextBar({
     return (
       <div className={`bg-slate-50/90 p-3 sm:p-3.5 rounded-2xl border border-slate-200/90 flex items-center justify-between gap-3 text-xs shadow-2xs ${className}`}>
         <span className="text-slate-400 font-medium italic">ยังไม่ได้ระบุผู้รับการดูแล</span>
-        {patients.length > 0 && onSelectPatient && showSwitcher && (
+        {(patients || []).length > 0 && onSelectPatient && showSwitcher && (
           <select
             onChange={(e) => e.target.value && onSelectPatient(e.target.value)}
             className="text-xs font-bold text-purple-700 bg-white border border-purple-200 px-3 py-1.5 rounded-xl shadow-2xs focus:ring-2 focus:ring-purple-500 cursor-pointer"
           >
             <option value="">-- เลือกผู้รับการดูแล --</option>
-            {patients.map(p => {
+            {(patients || []).map(p => {
               const pInfo = formatPatientDisplay(p);
               return (
                 <option key={p.id} value={p.id}>
@@ -120,7 +120,7 @@ export default function PatientContextBar({
             className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-white hover:bg-purple-50/80 border border-purple-200 px-3 py-1.5 rounded-xl shadow-2xs focus:ring-2 focus:ring-purple-500 focus:outline-none cursor-pointer transition-all"
             aria-label="เปลี่ยนผู้รับการดูแล"
           >
-            {patients.map(p => {
+            {(patients || []).map(p => {
               const pInfo = formatPatientDisplay(p);
               return (
                 <option key={p.id} value={p.id}>

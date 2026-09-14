@@ -912,7 +912,7 @@ export default function PatientsList({
               </span>
             )}
             <span className="text-[11px] font-bold text-slate-500 ml-auto">
-              แสดง {filteredPatients.length} จาก {patients.length} คน
+              แสดง {filteredPatients.length} จาก {(patients || []).length} คน
             </span>
           </div>
         )}

@@ -82,6 +82,91 @@ export function calculateAgeFromDob(dobStr?: string, refDate: Date = new Date())
   return 0;
 }
 
+export interface DetailedAge {
+  years: number;
+  months: number;
+  days: number;
+  displayText: string;
+}
+
+/**
+ * Calculates detailed age (years, months, days) and clinical Thai age display string
+ * dynamically from Date of Birth compared to reference/current date.
+ */
+export function calculateDetailedAge(dobStr?: string, refDate: Date = new Date()): DetailedAge | null {
+  if (!dobStr) return null;
+  const str = String(dobStr).trim();
+  if (!str || str === '-' || str === '0' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') return null;
+
+  try {
+    let birthYear = 0;
+    let birthMonth = 0; // 0-indexed
+    let birthDay = 1;
+
+    if (/^\d{4}$/.test(str)) {
+      const year = parseInt(str, 10);
+      birthYear = year > 2400 ? year - 543 : year;
+      birthMonth = 0;
+      birthDay = 1;
+    } else {
+      const norm = parseAndNormalizeDob(str);
+      if (norm && norm.yearCE) {
+        birthYear = parseInt(norm.yearCE, 10);
+        birthMonth = parseInt(norm.month, 10) - 1;
+        birthDay = parseInt(norm.day, 10);
+      } else {
+        const fallbackDate = new Date(str);
+        if (!isNaN(fallbackDate.getTime())) {
+          birthYear = fallbackDate.getFullYear();
+          if (birthYear > 2400) birthYear -= 543;
+          birthMonth = fallbackDate.getMonth();
+          birthDay = fallbackDate.getDate();
+        } else {
+          return null;
+        }
+      }
+    }
+
+    if (birthYear <= 0 || birthYear > refDate.getFullYear()) return null;
+
+    let years = refDate.getFullYear() - birthYear;
+    let months = refDate.getMonth() - birthMonth;
+    let days = refDate.getDate() - birthDay;
+
+    if (days < 0) {
+      months--;
+      const prevMonthLastDay = new Date(refDate.getFullYear(), refDate.getMonth(), 0).getDate();
+      days += prevMonthLastDay;
+    }
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    if (years < 0 || years > 125) return null;
+
+    let displayText = '';
+    if (years > 0 && months > 0) {
+      displayText = `${years} ปี ${months} เดือน`;
+    } else if (years > 0) {
+      displayText = `${years} ปี 0 เดือน`;
+    } else if (months > 0) {
+      displayText = `${months} เดือน`;
+    } else {
+      displayText = `${days} วัน`;
+    }
+
+    return {
+      years,
+      months,
+      days,
+      displayText
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Determines Age Group based on age in years:
  * - Age < 7 years (0 - 6 years): เด็กเล็ก (Toddler / Young Child)
@@ -309,14 +394,49 @@ export function formatPatientDisplay(p: Patient | any): PatientNameFormatted {
     };
   }
 
-  // 1. Calculate and reconcile real age
-  const dob = p.dob || p.birthDate || (p as any).BirthDate || '';
+  // 1. Calculate and reconcile real age dynamically from birth_date
+  const dob = (p.birth_date || 
+               p.birthDate || 
+               p.dob || 
+               (p as any)['birth_date'] || 
+               (p as any)['Birth_Date'] || 
+               (p as any).BirthDate || 
+               (p as any).birthdate || 
+               (p as any)['วันเกิด'] || 
+               (p as any)['วันเดือนปีเกิด'] || 
+               p.profile?.dob ||
+               (p.profile as any)?.birth_date ||
+               '').toString().trim();
+
   let realAge = 0;
-  if (dob) {
-    realAge = calculateAgeFromDob(dob);
-  }
-  if (!realAge && p.age !== undefined && p.age !== null && p.age !== '') {
-    realAge = Number(p.age) || 0;
+  let dynamicAgeDisplayText = '';
+  const detailed = dob ? calculateDetailedAge(dob) : null;
+
+  if (detailed) {
+    realAge = detailed.years;
+    dynamicAgeDisplayText = detailed.displayText;
+  } else {
+    // If no birth_date is provided, accurately reflect the exact age data from Google Sheet Patients tab
+    const rawAgeVal = p.age ?? (p as any)['อายุ'] ?? (p as any).rawAge ?? '';
+    const rawAgeStr = String(rawAgeVal).trim();
+    if (rawAgeStr && rawAgeStr !== '-' && rawAgeStr !== '0' && rawAgeStr.toLowerCase() !== 'null' && rawAgeStr.toLowerCase() !== 'undefined') {
+      if (rawAgeStr.includes('ปี') || rawAgeStr.includes('เดือน')) {
+        dynamicAgeDisplayText = rawAgeStr;
+        const matchYear = rawAgeStr.match(/(\d+)\s*ปี/);
+        realAge = matchYear ? parseInt(matchYear[1], 10) : (parseInt(rawAgeStr, 10) || 0);
+      } else {
+        const num = Number(rawAgeStr);
+        if (!isNaN(num) && num > 0) {
+          realAge = num;
+          dynamicAgeDisplayText = `${num} ปี`;
+        } else {
+          dynamicAgeDisplayText = rawAgeStr;
+        }
+      }
+    } else {
+      realAge = 0;
+      dynamicAgeDisplayText = '- ปี';
+    }
   }
 
   // 2. Determine gender with comprehensive detection (prefix, HN, notes, raw props)
@@ -413,7 +533,7 @@ export function formatPatientDisplay(p: Patient | any): PatientNameFormatted {
   const fullFormattedWithAgeGroup = `${fullFormattedName} ${ageGroupTag}`;
 
   const ageUnit = 'ปี';
-  const ageDisplayText = realAge > 0 ? `${realAge} ปี` : '- ปี';
+  const ageDisplayText = dynamicAgeDisplayText || (realAge > 0 ? `${realAge} ปี` : '- ปี');
 
   return {
     title: resolvedTitle,
@@ -1037,6 +1157,18 @@ export interface PersistentPatientData {
   id?: string;
   savedAt?: string;
   role?: 'patient';
+  birth_date?: string;
+  birthDate?: string;
+  dob?: string;
+  age?: number;
+  gender?: any;
+  weight?: number;
+  height?: number;
+  startDate?: string;
+  status?: string;
+  assignments?: any[];
+  notes?: string;
+  nickname?: string;
 }
 
 /**
@@ -1047,6 +1179,18 @@ export function savePersistentPatientSession(data: {
   name: string;
   phone?: string;
   id?: string;
+  birth_date?: string;
+  birthDate?: string;
+  dob?: string;
+  age?: number;
+  gender?: any;
+  weight?: number;
+  height?: number;
+  startDate?: string;
+  status?: string;
+  assignments?: any[];
+  notes?: string;
+  nickname?: string;
 }): void {
   if (typeof window === 'undefined') return;
   try {
@@ -1056,7 +1200,19 @@ export function savePersistentPatientSession(data: {
       phone: data.phone || '',
       id: data.id || data.hn,
       savedAt: new Date().toISOString(),
-      role: 'patient'
+      role: 'patient',
+      birth_date: data.birth_date,
+      birthDate: data.birthDate,
+      dob: data.dob,
+      age: data.age,
+      gender: data.gender,
+      weight: data.weight,
+      height: data.height,
+      startDate: data.startDate,
+      status: data.status,
+      assignments: data.assignments,
+      notes: data.notes,
+      nickname: data.nickname
     };
 
     const strPayload = JSON.stringify(payload);
@@ -1214,5 +1370,90 @@ export function deduplicateAppointments<T extends { id?: string; patientId?: str
 
   return Array.from(seen.values());
 }
+
+/**
+ * Invalidate local cache for HN profile immediately after save so the screen re-renders fresh data
+ * directly from the response/sheet.
+ */
+export function invalidatePatientProfileCache(hnOrId: string, updatedPatient?: any): void {
+  if (!hnOrId) return;
+  const cleanHn = String(hnOrId).trim();
+  const cleanHnLower = cleanHn.toLowerCase();
+
+  try {
+    // 1. Remove individual patient cache keys
+    const specificKeys = [
+      `growth_lab_patient_${cleanHn}`,
+      `growth_lab_patient_${cleanHnLower}`,
+      `patient_profile_${cleanHn}`,
+      `patient_profile_${cleanHnLower}`,
+      `growthlab_patient_${cleanHn}`,
+      `growthlab_patient_${cleanHnLower}`,
+      `patient_cache_${cleanHn}`,
+      `patient_cache_${cleanHnLower}`
+    ];
+    specificKeys.forEach(k => {
+      try {
+        localStorage.removeItem(k);
+        sessionStorage.removeItem(k);
+      } catch {}
+    });
+
+    // 2. Invalidate / update master patient lists in localStorage
+    const masterKeys = ['growthlab_patients_master', 'growth_lab_patients', 'growthlab_patients'];
+    masterKeys.forEach(key => {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            let found = false;
+            const nextList = list.map(item => {
+              const itemHn = String(item.hn || item.id || '').trim().toLowerCase();
+              if (itemHn === cleanHnLower || (updatedPatient?.id && item.id === updatedPatient.id)) {
+                found = true;
+                return updatedPatient ? { ...item, ...updatedPatient } : item;
+              }
+              return item;
+            });
+            if (updatedPatient && !found) {
+              nextList.unshift(updatedPatient);
+            }
+            localStorage.setItem(key, JSON.stringify(nextList));
+          }
+        } catch {}
+      }
+    });
+
+    // 3. Update active session or persistent patient if it matches
+    const activeKeys = ['growth_lab_registered_patient', 'growth_lab_persistent_patient'];
+    activeKeys.forEach(k => {
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          const parsedHn = String(parsed.hn || parsed.id || '').trim().toLowerCase();
+          if (parsedHn === cleanHnLower || (updatedPatient?.id && parsed.id === updatedPatient.id)) {
+            if (updatedPatient) {
+              localStorage.setItem(k, JSON.stringify({ ...parsed, ...updatedPatient }));
+            } else {
+              localStorage.removeItem(k);
+            }
+          }
+        } catch {}
+      }
+    });
+
+    // 4. Notify app components via window CustomEvent
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('growthlab_patient_profile_invalidated', {
+        detail: { hn: cleanHn, patient: updatedPatient }
+      }));
+    }
+  } catch (err) {
+    console.warn('[patientUtils] Error invalidating patient profile cache:', err);
+  }
+}
+
 
 

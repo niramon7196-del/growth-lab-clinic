@@ -1,3 +1,0 @@
-perl -0777 -pi -e 's/\/\/ 1. Direct query to Google Sheets API\n      fetchPatientByHnFromGoogleSheets\(authKey\).then\(livePatient => \{/\/\/ 1. Direct query to Google Sheets API\n      setIsInitialDataLoading(true);\n      fetchPatientByHnFromGoogleSheets(authKey).then(livePatient => {/g' src/App.tsx
-
-perl -0777 -pi -e 's/        \}\n      \}\).catch\(err => \{\n        console.warn\('\''\[App\] Live Google Sheets fetch failed:'\'', err\);\n      \}\);/        }\n      }).catch(err => {\n        console.warn('\''[App] Live Google Sheets fetch failed:'\'', err);\n      }).finally(() => {\n        setIsInitialDataLoading(false);\n      });/g' src/App.tsx

@@ -21,13 +21,13 @@ export default function PDFExporter({
   );
 
   const activePatientId = selectedPatientId || reportPatientId;
-  const selectedPatient = patients.find((p) => p.id === activePatientId);
+  const selectedPatient = (patients || []).find((p) => p.id === activePatientId);
 
   // Computations for report
-  const patientLogs = selectedPatient ? logs.filter((l) => l.patientId === selectedPatient.id) : [];
+  const patientLogs = selectedPatient ? (logs || []).filter((l) => l.patientId === selectedPatient.id) : [];
   
   // Compliance Rate (unique dates / 30)
-  const uniqueDates = new Set(patientLogs.map((l) => l.date));
+  const uniqueDates = new Set((patientLogs || []).map((l) => l.date));
   const complianceRate = Math.min(100, Math.round((uniqueDates.size / 30) * 100));
 
   // Avg Score
@@ -127,7 +127,7 @@ export default function PDFExporter({
             className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:bg-white outline-hidden"
           >
             <option value="">-- กรุณาเลือกผู้รับการดูแล --</option>
-            {patients.map((p) => (
+            {(patients || []).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.hn} | {p.firstName} {p.lastName}
               </option>

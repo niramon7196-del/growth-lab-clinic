@@ -86,12 +86,15 @@ export interface Patient {
   hn: string; // Hospital Number
   qrToken?: string; // Unique QR Token bound to patient
   title?: string; // คำนำหน้า เช่น ด.ช. / ด.ญ.
+  name?: string; // Full name from Google Sheet
   firstName: string;
   lastName: string;
   nickname: string;
   age: number;
   gender?: 'ชาย' | 'หญิง' | 'อื่นๆ' | string;
   dob?: string; // YYYY-MM-DD
+  birth_date?: string; // Exact column name in Google Sheet Patients tab
+  birthDate?: string;
   citizenId?: string; // เลขบัตรประชาชน 13 หลัก
   weight: number; // Kg
   height: number; // Cm

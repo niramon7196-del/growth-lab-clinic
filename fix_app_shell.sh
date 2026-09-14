@@ -1,1 +1,0 @@
-sed -i 's/<div className={`app-shell.*/<div className={`app-shell bg-aurora-soft font-sans text-[#1A1A24] relative w-full max-w-[100vw] items-stretch flex box-border overflow-x-hidden ${isPatient ? "min-h-[100dvh] overflow-y-auto" : "h-[100dvh] overflow-y-hidden"}`}>/g' src/App.tsx

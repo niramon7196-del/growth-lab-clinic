@@ -1100,7 +1100,7 @@ export default function UserWorkspace({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
-                      {patient.checkInHistory.map((rec) => (
+                      {((patient && patient.checkInHistory) || []).map((rec) => (
                         <tr key={rec.id} className="hover:bg-purple-50/40 transition-colors">
                           <td className="py-3.5 px-4 sm:px-6 font-bold text-slate-900">
                             {formatThaiDate(rec.date)}
@@ -1300,7 +1300,7 @@ export default function UserWorkspace({
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {patientAppointments.map((appt) => (
+                  {(patientAppointments || []).map((appt) => (
                     <div
                       key={appt.id}
                       className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-purple-50/30 transition-colors"
@@ -1409,7 +1409,7 @@ export default function UserWorkspace({
               </div>
 
               {/* Event Check-ins */}
-              {patient.checkInHistory?.map((ci) => (
+              {((patient && patient.checkInHistory) || []).map((ci) => (
                 <div key={ci.id} className="relative flex items-start gap-4 pl-2">
                   <div className="w-5 h-5 rounded-full bg-emerald-500 border-4 border-white shadow-2xs shrink-0 z-10 mt-0.5" />
                   <div className="flex-1 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">

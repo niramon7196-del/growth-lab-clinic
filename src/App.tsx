@@ -63,7 +63,8 @@ import {
   savePersistentPatientSession,
   deduplicatePatientList,
   deduplicateAppointments,
-  calculateAgeFromDob
+  calculateAgeFromDob,
+  invalidatePatientProfileCache
 } from './utils/patientUtils';
 import { 
   APP_ENV,
@@ -624,14 +625,16 @@ export default function App() {
               }
             }
             const phone = cleanPhoneString(p.phone || p.parentPhone);
-            const dob = p.dob || (p as any).birthDate || '';
+            const dob = (p.birth_date || p.dob || (p as any).birthDate || '').toString().trim();
             const calculatedAge = dob ? calculateAgeFromDob(dob) : (Number(p.age) || 0);
             return {
               ...p,
               firstName,
               nickname: nickname || firstName,
               phone,
-              dob,
+              birth_date: dob || undefined,
+              birthDate: dob || undefined,
+              dob: dob || undefined,
               age: calculatedAge,
               parentPhone: phone || p.parentPhone || '',
               qrToken: p.qrToken || `tok_${p.id}_${(p.hn || 'hn').toLowerCase().replace(/[^a-z0-9]/g, '')}`,
@@ -787,10 +790,10 @@ export default function App() {
   const [feedback, setFeedback] = useState<{ message: string; type: FeedbackType } | null>(null);
   const [isPatientHomeworkOpen, setIsPatientHomeworkOpen] = useState<boolean>(true);
   const [selectedExerciseIdFromNav, setSelectedExerciseIdFromNav] = useState<string | null>(null);
-  const [selectedHomeworkStage, setSelectedHomeworkStage] = useState<'all' | 'gns' | 'sleep' | 'exercise' | 'omt'>(() => {
+  const [selectedHomeworkStage, setSelectedHomeworkStage] = useState<'all' | 'gns' | 'sleep' | 'exercise' | 'omt' | 'master_template'>(() => {
     try {
       const saved = localStorage.getItem('growth_lab_active_homework_stage');
-      if (saved && ['all', 'gns', 'sleep', 'exercise', 'omt'].includes(saved)) {
+      if (saved && ['all', 'gns', 'sleep', 'exercise', 'omt', 'master_template'].includes(saved)) {
         return saved as any;
       }
     } catch {}
@@ -1269,11 +1272,44 @@ export default function App() {
       const target = e.detail?.targetTab || 'หน้าหลัก';
       setActiveTab(target);
     };
+    
+    const handleVideoDeleted = (e: any) => {
+      const deletedVideoId = e.detail?.videoId;
+      if (!deletedVideoId) return;
+
+      setPatients(prev => {
+        const updated = prev.map(p => {
+          if (!p.assignments || p.assignments.length === 0) return p;
+          const filtered = p.assignments.filter(a => a.exerciseId !== deletedVideoId && a.id !== deletedVideoId);
+          if (filtered.length !== p.assignments.length) {
+            const updatedAssignedTasks = filtered.map(a => a.exerciseId || a.id);
+            dataAdapter.updateMember(p.id, { 
+              assignments: filtered, 
+              assignedTasks: updatedAssignedTasks,
+              assignedExercises: updatedAssignedTasks
+            }).catch(err => console.warn('[App] Auto-sync assignment error:', err));
+            return {
+              ...p,
+              assignments: filtered,
+              assignedExercises: updatedAssignedTasks,
+              assignedTasks: updatedAssignedTasks
+            };
+          }
+          return p;
+        });
+        saveStateToLocal('growth_lab_patients', updated);
+        return updated;
+      });
+    };
+
     window.addEventListener('growthlab_patients_updated', handlePatientsSyncEvent);
     window.addEventListener('growth_lab_return_to_home', handleReturnToHome);
+    window.addEventListener('growthlab_video_deleted', handleVideoDeleted);
+    
     return () => {
       window.removeEventListener('growthlab_patients_updated', handlePatientsSyncEvent);
       window.removeEventListener('growth_lab_return_to_home', handleReturnToHome);
+      window.removeEventListener('growthlab_video_deleted', handleVideoDeleted);
     };
   }, []);
 
@@ -2455,9 +2491,23 @@ export default function App() {
   };
 
   const handleEditPatient = async (updatedPatient: Patient) => {
+    // 1. Reconcile dynamic age from birth_date
+    const birth_date = (updatedPatient.birth_date || updatedPatient.birthDate || updatedPatient.dob || '').toString().trim();
+    let calculatedAge = updatedPatient.age;
+    if (birth_date && birth_date !== '-') {
+      calculatedAge = calculateAgeFromDob(birth_date);
+    }
+    const cleanPatient: Patient = {
+      ...updatedPatient,
+      birth_date: birth_date || undefined,
+      birthDate: birth_date || undefined,
+      dob: birth_date || undefined,
+      age: calculatedAge
+    };
+
     const updated = patients.map((p) => {
-      if (p.id === updatedPatient.id || (p.hn && p.hn === updatedPatient.hn)) {
-        return { ...p, ...updatedPatient };
+      if (p.id === cleanPatient.id || (p.hn && p.hn === cleanPatient.hn)) {
+        return { ...p, ...cleanPatient };
       }
       return p;
     });
@@ -2468,8 +2518,12 @@ export default function App() {
     localStorage.setItem('growthlab_patients', serialized);
     saveStateToLocal('growth_lab_patients', updated);
 
+    // Invalidate local cache for HN profile immediately after save so the screen re-renders fresh data
+    const targetHn = cleanPatient.hn || cleanPatient.id;
+    invalidatePatientProfileCache(targetHn, cleanPatient);
+
     try {
-      await dataAdapter.updateMember(updatedPatient.id, updatedPatient);
+      await dataAdapter.updateMember(cleanPatient.id, cleanPatient);
     } catch (err) {
       console.warn('[App] Cloud sync error during edit:', err);
     }
@@ -2814,10 +2868,18 @@ export default function App() {
     Dashboard: true,
     'ผู้เข้าโปรแกรม': true,
     'ผู้รับการดูแล': true,
+    'สารบบผู้รับการดูแล': true,
+    'สารบบรายชื่อผู้เข้าโปรแกรม': true,
+    'patients': true,
     'ติดตามผล': true,
     'ติดตามการรักษา': true,
+    'ติดตามผลภาพรวม': true,
     'EF / แบบฝึก': true,
+    'เกณฑ์มาตรฐาน / EF': true,
+    'เกณฑ์มาตรฐาน / EF (Clinical Standards)': true,
+    'เกณฑ์มาตรฐาน': true,
     'แบบฝึก / EF': true,
+    'แบบฝึก': true,
     'แบบฝึกหัดที่ได้รับมอบหมาย': true,
     'ExerciseView': true,
     'Master Template': true,
@@ -2844,7 +2906,17 @@ export default function App() {
   } : (currentStaffAccount?.permissions || currentUser?.permissions || {
     Dashboard: true,
     'ผู้รับการดูแล': true,
+    'สารบบผู้รับการดูแล': true,
     'ติดตามการรักษา': true,
+    'ติดตามผล': true,
+    'ติดตามผลภาพรวม': true,
+    'EF / แบบฝึก': true,
+    'เกณฑ์มาตรฐาน / EF': true,
+    'เกณฑ์มาตรฐาน / EF (Clinical Standards)': true,
+    'เกณฑ์มาตรฐาน': true,
+    'แบบฝึก / EF': true,
+    'แบบฝึกหัดที่ได้รับมอบหมาย': true,
+    'Master Template': true,
     'QR': true,
     'Check-In': true,
     'นัดหมาย': true,
@@ -2912,8 +2984,10 @@ export default function App() {
         'Executive Summary', 'Clinical Source', 'Staff Management', 'Content Management',
         'Communications / Alerts', 'Organization Settings',
         'บุคลากร', 'ตั้งค่า', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การแจ้งเตือน',
-        'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
-        'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
+        'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'สารบบผู้รับการดูแล', 'สารบบรายชื่อผู้เข้าโปรแกรม', 'patients',
+        'ติดตามผล', 'ติดตามการรักษา', 'ติดตามผลภาพรวม', 'QR', 'Check-In',
+        'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'เกณฑ์มาตรฐาน / EF', 'เกณฑ์มาตรฐาน / EF (Clinical Standards)', 'เกณฑ์มาตรฐาน', 'แบบฝึก / EF', 'แบบฝึก', 'Master Template', 'ExerciseView', 'ExerciseMode',
+        'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
         'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
         'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
       ];
@@ -2923,8 +2997,10 @@ export default function App() {
         'Executive Summary', 'Clinical Source', 'Staff Management', 'Content Management',
         'Communications / Alerts', 'Organization Settings',
         'บุคลากร', 'ตั้งค่า', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การแจ้งเตือน',
-        'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'ติดตามผล', 'ติดตามการรักษา', 'QR', 'Check-In',
-        'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
+        'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'สารบบผู้รับการดูแล', 'สารบบรายชื่อผู้เข้าโปรแกรม', 'patients',
+        'ติดตามผล', 'ติดตามการรักษา', 'ติดตามผลภาพรวม', 'QR', 'Check-In',
+        'นัดหมาย', 'รายงาน', 'EF / แบบฝึก', 'เกณฑ์มาตรฐาน / EF', 'เกณฑ์มาตรฐาน / EF (Clinical Standards)', 'เกณฑ์มาตรฐาน', 'แบบฝึก / EF', 'แบบฝึก', 'Master Template', 'ExerciseView', 'ExerciseMode',
+        'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After',
         'ระบบ / โปรไฟล์', 'โปรไฟล์', 'แบบฝึกหัดที่ได้รับมอบหมาย', 'การบ้านและ Progress',
         'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ', 'เอกสารสำคัญโครงการ', 'Project Dossier'
       ];
@@ -2935,8 +3011,11 @@ export default function App() {
     }
     // Medical Staff allowed tabs (Clinic Owner / Doctor / Assistant / Staff)
     return [
-      'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'นัดหมาย', 'การแจ้งเตือน', 'ระบบ / โปรไฟล์', 'โปรไฟล์',
-      'ติดตามผล', 'ติดตามการรักษา', 'EF / แบบฝึก', 'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After', 'QR', 'Check-In',
+      'Dashboard', 'ผู้เข้าโปรแกรม', 'ผู้รับการดูแล', 'สารบบผู้รับการดูแล', 'สารบบรายชื่อผู้เข้าโปรแกรม', 'patients',
+      'นัดหมาย', 'การแจ้งเตือน', 'ระบบ / โปรไฟล์', 'โปรไฟล์',
+      'ติดตามผล', 'ติดตามการรักษา', 'ติดตามผลภาพรวม',
+      'EF / แบบฝึก', 'เกณฑ์มาตรฐาน / EF', 'เกณฑ์มาตรฐาน / EF (Clinical Standards)', 'เกณฑ์มาตรฐาน', 'แบบฝึก / EF', 'แบบฝึก', 'Master Template', 'ExerciseView', 'ExerciseMode',
+      'GNS', 'การนอน', 'การออกกำลังกาย', 'Before / After', 'QR', 'Check-In',
       'แบบฝึกหัดที่ได้รับมอบหมาย', 'รายงาน', 'Clinical Source', 'เอกสารสำคัญโครงการ', 'Project Dossier', 'บุคลากร', 'Staff Management', 'คู่มือ', 'คู่มือการใช้งาน', 'วิดีโอ', 'คลังวิดีโอสาธิต', 'media_library', 'Exercise Media Hub', 'การบ้านและ Progress',
       'track_history', 'track_compliance', 'track_behavior', 'คลังความรู้', 'knowledge_hub', 'คลังความรู้สุขภาพ'
     ];
@@ -2948,18 +3027,28 @@ export default function App() {
       case 'knowledge_hub':
       case 'คลังความรู้สุขภาพ':
         return '📚 คลังความรู้สุขภาพ & เคล็ดลับการฝึก';
+      case 'สารบบผู้รับการดูแล':
       case 'ผู้รับการดูแล':
       case 'ผู้เข้าโปรแกรม':
-        return selectedPatientId ? 'ข้อมูลผู้รับการดูแล' : 'ผู้รับการดูแล';
+      case 'patients':
+      case 'สารบบรายชื่อผู้เข้าโปรแกรม':
+        return selectedPatientId ? 'ข้อมูลผู้รับการดูแล' : 'สารบบผู้รับการดูแล';
       case 'ติดตามผล':
       case 'ติดตามการรักษา':
-        return 'ติดตามผล';
+      case 'ติดตามผลภาพรวม':
+        return 'ติดตามผลภาพรวม';
       case 'QR':
       case 'Check-In':
         return 'คิวอาร์ / เช็คอิน';
       case 'EF / แบบฝึก':
+      case 'เกณฑ์มาตรฐาน / EF':
+      case 'เกณฑ์มาตรฐาน / EF (Clinical Standards)':
+      case 'เกณฑ์มาตรฐาน':
+      case 'แบบฝึก / EF':
+      case 'แบบฝึก':
+      case 'Master Template':
       case 'แบบฝึกหัดที่ได้รับมอบหมาย':
-        return isPatient ? 'แบบฝึกหัดที่ได้รับมอบหมาย' : 'แบบฝึก / EF';
+        return isPatient ? 'แบบฝึกหัดที่ได้รับมอบหมาย' : 'เกณฑ์มาตรฐาน / EF (Clinical Standards)';
       case 'GNS':
         return 'โภชนาการ';
       case 'การนอน':
@@ -3041,22 +3130,28 @@ export default function App() {
       // 5. Fallback directly from persistent session to ensure instant render
       const persistent = getPersistentPatientSession();
       if (persistent && (persistent.hn || persistent.id)) {
+        const persistentDob = (persistent.birth_date || persistent.birthDate || persistent.dob || '').toString().trim();
+        const dynamicAge = persistentDob ? calculateAgeFromDob(persistentDob) : (persistent.age || 0);
         return {
           id: persistent.id || persistent.hn || 'patient',
           hn: persistent.hn || persistent.id || 'hn001',
           firstName: persistent.name || 'คนไข้',
           lastName: '',
-          nickname: persistent.name || 'คนไข้',
+          name: persistent.name || 'คนไข้',
+          nickname: persistent.nickname || persistent.name || 'คนไข้',
           phone: persistent.phone || '',
           parentPhone: persistent.phone || '',
-          age: 10,
-          gender: 'other',
-          weight: 30,
-          height: 135,
-          startDate: new Date().toISOString().split('T')[0],
-          status: 'active',
-          assignments: [],
-          notes: ''
+          birth_date: persistentDob || undefined,
+          birthDate: persistentDob || undefined,
+          dob: persistentDob || undefined,
+          age: dynamicAge,
+          gender: persistent.gender || 'other',
+          weight: persistent.weight || 30,
+          height: persistent.height || 135,
+          startDate: persistent.startDate || new Date().toISOString().split('T')[0],
+          status: persistent.status || 'active',
+          assignments: persistent.assignments || [],
+          notes: persistent.notes || ''
         } as Patient;
       }
 
@@ -3394,10 +3489,10 @@ export default function App() {
                           const isActive = activeTab === item.id || 
                             (item.id === 'media_library' && (activeTab === 'media_library' || activeTab === 'คลังวิดีโอสาธิต' || activeTab === 'วิดีโอ' || activeTab === 'Exercise Media Hub')) ||
                             (item.id === 'คลังวิดีโอสาธิต' && (activeTab === 'media_library' || activeTab === 'คลังวิดีโอสาธิต' || activeTab === 'วิดีโอ' || activeTab === 'Exercise Media Hub')) ||
-                            (item.id === 'ผู้รับการดูแล' && activeTab === 'ผู้เข้าโปรแกรม') || 
-                            (item.id === 'ติดตามผล' && (activeTab === 'ติดตามการรักษา' || activeTab === 'การบ้านและ Progress')) ||
+                            ((item.id === 'ผู้รับการดูแล' || item.id === 'สารบบผู้รับการดูแล') && (activeTab === 'ผู้เข้าโปรแกรม' || activeTab === 'ผู้รับการดูแล' || activeTab === 'สารบบผู้รับการดูแล' || activeTab === 'patients' || activeTab === 'สารบบรายชื่อผู้เข้าโปรแกรม')) || 
+                            ((item.id === 'ติดตามผล' || item.id === 'ติดตามผลภาพรวม') && (activeTab === 'ติดตามผล' || activeTab === 'ติดตามผลภาพรวม' || activeTab === 'ติดตามการรักษา' || activeTab === 'การบ้านและ Progress')) ||
                             (item.id === 'QR' && activeTab === 'Check-In') ||
-                            (item.id === 'EF / แบบฝึก' && activeTab === 'แบบฝึกหัดที่ได้รับมอบหมาย') ||
+                            ((item.id === 'EF / แบบฝึก' || item.id === 'เกณฑ์มาตรฐาน / EF') && (activeTab === 'EF / แบบฝึก' || activeTab === 'เกณฑ์มาตรฐาน / EF' || activeTab === 'เกณฑ์มาตรฐาน / EF (Clinical Standards)' || activeTab === 'เกณฑ์มาตรฐาน' || activeTab === 'แบบฝึก / EF' || activeTab === 'แบบฝึก' || activeTab === 'Master Template' || activeTab === 'แบบฝึกหัดที่ได้รับมอบหมาย' || activeTab === 'ExerciseView' || activeTab === 'ExerciseMode')) ||
                             (item.id === 'ระบบ / โปรไฟล์' && (activeTab === 'โปรไฟล์' || activeTab === 'ระบบ / โปรไฟล์')) ||
                             ((item.id === 'Clinical Source' || item.id === 'Project Dossier') && (activeTab === 'Clinical Source' || activeTab === 'Project Dossier' || activeTab === 'เอกสารสำคัญโครงการ'));
                           const unreadAlertsCount = item.id === 'การแจ้งเตือน' ? unreadCount : 0;
@@ -3408,7 +3503,12 @@ export default function App() {
                               onClick={() => {
                                 setActiveTab(item.id);
                                 if ((item as any).targetSubTab) setProfileSubTab((item as any).targetSubTab);
-                                if (item.id === 'ผู้รับการดูแล') setSelectedPatientId(undefined);
+                                if (item.id === 'ผู้รับการดูแล' || item.id === 'สารบบผู้รับการดูแล') {
+                                  setSelectedPatientId(undefined);
+                                }
+                                if (item.id === 'EF / แบบฝึก' || item.id === 'เกณฑ์มาตรฐาน / EF') {
+                                  setSelectedHomeworkStage('master_template');
+                                }
                                 setActiveModule(null);
                                 setIsMobileMenuOpen(false);
                               }}
@@ -3626,15 +3726,15 @@ export default function App() {
             >
           {activeTab === 'Dashboard' && !isPatient && (
             <Dashboard 
-              patients={scopedPatients}
-              appointments={scopedAppointments}
-              logs={scopedLogs}
+              patients={scopedPatients || []}
+              appointments={scopedAppointments || []}
+              logs={scopedLogs || []}
               settings={settings}
               currentUser={currentUser}
               userRole={userRole}
               onNavigate={(tab, patientId, subTab) => {
                 if (patientId) setSelectedPatientId(patientId);
-                else if (tab === 'ผู้รับการดูแล') setSelectedPatientId(undefined);
+                else if (tab === 'ผู้รับการดูแล' || tab === 'สารบบผู้รับการดูแล') setSelectedPatientId(undefined);
                 if (subTab) setProfileSubTab(subTab);
                 setActiveTab(tab);
               }}
@@ -3712,11 +3812,11 @@ export default function App() {
 
           {(activeTab === 'ติดตามผล' || activeTab === 'ติดตามการรักษา' || activeTab === 'ติดตามผลภาพรวม') && !isPatient && (
             <CheckInAnalyticsPanel 
-              patients={scopedPatients}
+              patients={scopedPatients || []}
               onSelectPatient={(id) => handleSelectPatient(id, true)}
               onNavigate={(tab, patientId, subTab) => {
                 if (patientId) setSelectedPatientId(patientId);
-                else if (tab === 'ผู้รับการดูแล') setSelectedPatientId(undefined);
+                else if (tab === 'ผู้รับการดูแล' || tab === 'สารบบผู้รับการดูแล') setSelectedPatientId(undefined);
                 if (subTab) setProfileSubTab(subTab);
                 setActiveTab(tab);
               }}
@@ -3727,8 +3827,8 @@ export default function App() {
 
           {activeTab === 'นัดหมาย' && (
             <AppointmentsList 
-              appointments={scopedAppointments}
-              patients={scopedPatients}
+              appointments={scopedAppointments || []}
+              patients={scopedPatients || []}
               onAddAppointment={handleAddAppointment}
               onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
               onDeleteAppointment={handleDeleteAppointment}
@@ -3753,8 +3853,8 @@ export default function App() {
 
           {activeTab === 'รายงาน' && !isPatient && (
             <PDFExporter 
-              patients={scopedPatients}
-                            logs={scopedLogs}
+              patients={scopedPatients || []}
+              logs={scopedLogs || []}
               selectedPatientId={effectivePatientId}
             />
           )}
@@ -3782,6 +3882,7 @@ export default function App() {
               onNavigateToTab={(tab, patientId, subTab) => {
                 setActiveTab(tab);
                 if (patientId) handleSelectPatient(patientId);
+                else if (tab === 'ผู้รับการดูแล' || tab === 'สารบบผู้รับการดูแล') handleSelectPatient(undefined);
                 if (subTab) setProfileSubTab(subTab);
               }}
             />
@@ -3803,17 +3904,17 @@ export default function App() {
                   onLogout={handleLogout}
                 />
               ) : (
-                <ProfileLoadingFallback isLoading={isInitialDataLoading} patients={patients} onAutoLink={handleAutoLinkSuccess} />
+                <ProfileLoadingFallback isLoading={isInitialDataLoading} patients={patients || []} onAutoLink={handleAutoLinkSuccess} />
               )
             ) : (
               <QRCodeCheckIn
-                patients={scopedPatients} 
-                              settings={settings}
+                patients={scopedPatients || []} 
+                settings={settings}
                 onSelectPatient={handleSelectPatient}
                 onNavigate={(tab, patientId, subTab) => {
                   setActiveTab(tab);
                   if (patientId) handleSelectPatient(patientId);
-                  else if (tab === 'ผู้รับการดูแล') handleSelectPatient(undefined);
+                  else if (tab === 'ผู้รับการดูแล' || tab === 'สารบบผู้รับการดูแล') handleSelectPatient(undefined);
                   if (subTab) setProfileSubTab(subTab);
                 }}
                 onBack={goBack}
@@ -3822,12 +3923,12 @@ export default function App() {
             )
           )}
 
-          {(activeTab === 'แบบฝึกหัดที่ได้รับมอบหมาย' || activeTab === 'ExerciseView' || activeTab === 'ExerciseMode' || activeTab === 'EF / แบบฝึก' || activeTab === 'แบบฝึก' || activeTab === 'Master Template') && (
+          {(activeTab === 'แบบฝึกหัดที่ได้รับมอบหมาย' || activeTab === 'ExerciseView' || activeTab === 'ExerciseMode' || activeTab === 'EF / แบบฝึก' || activeTab === 'เกณฑ์มาตรฐาน / EF' || activeTab === 'เกณฑ์มาตรฐาน / EF (Clinical Standards)' || activeTab === 'เกณฑ์มาตรฐาน' || activeTab === 'แบบฝึก / EF' || activeTab === 'แบบฝึก' || activeTab === 'Master Template') && (
             isPatient ? (
               assignedPatient ? (
                 <ExerciseView
                   patient={assignedPatient}
-                  patients={patients}
+                  patients={patients || []}
                   isClinicMode={false}
                   initialStage={selectedHomeworkStage}
                   onBack={() => {
@@ -3842,14 +3943,14 @@ export default function App() {
                   }}
                 />
               ) : (
-                <ProfileLoadingFallback isLoading={isInitialDataLoading} patients={patients} onAutoLink={handleAutoLinkSuccess} />
+                <ProfileLoadingFallback isLoading={isInitialDataLoading} patients={patients || []} onAutoLink={handleAutoLinkSuccess} />
               )
             ) : (
               <ExerciseView
-                patient={patients.find(p => p.id === effectivePatientId || p.hn === effectivePatientId) || null}
-                patients={patients}
+                patient={(patients || []).find(p => p.id === effectivePatientId || p.hn === effectivePatientId) || null}
+                patients={scopedPatients || patients || []}
                 isClinicMode={true}
-                initialStage={selectedHomeworkStage}
+                initialStage={activeTab === 'เกณฑ์มาตรฐาน / EF' || activeTab === 'เกณฑ์มาตรฐาน / EF (Clinical Standards)' || activeTab === 'เกณฑ์มาตรฐาน' || activeTab === 'Master Template' || activeTab === 'EF / แบบฝึก' ? 'master_template' : (selectedHomeworkStage || 'master_template')}
                 onBack={goBack}
                 onNavigateToHome={() => {
                   setActiveTab('Dashboard');
@@ -3857,7 +3958,7 @@ export default function App() {
                 onSelectPatient={(id) => handleSelectPatient(id, true)}
                 onLogout={handleLogout}
                 onCompleteExercise={(assignmentId) => {
-                  const p = patients.find(p => p.id === effectivePatientId || p.hn === effectivePatientId) || patients[0];
+                  const p = (patients || []).find(p => p.id === effectivePatientId || p.hn === effectivePatientId) || (patients && patients[0]);
                   if (p) handleToggleAssignmentComplete(p.id, assignmentId);
                 }}
               />
@@ -3869,17 +3970,17 @@ export default function App() {
               assignedPatient ? (
                 <HomeworkProgress 
                   patients={[assignedPatient]}
-                  logs={scopedLogs}
+                  logs={scopedLogs || []}
                   patientId={assignedPatient.id}
                   onBack={goBack} 
                 />
               ) : (
-                <ProfileLoadingFallback isLoading={isInitialDataLoading} patients={patients} onAutoLink={handleAutoLinkSuccess} />
+                <ProfileLoadingFallback isLoading={isInitialDataLoading} patients={patients || []} onAutoLink={handleAutoLinkSuccess} />
               )
             ) : (
               <HomeworkProgress 
-                patients={scopedPatients}
-                            logs={scopedLogs}
+                patients={scopedPatients || []}
+                logs={scopedLogs || []}
                 patientId={effectivePatientId}
                 onBack={goBack} 
               />

@@ -72,12 +72,13 @@ export default function QRCodeCheckIn({ patients, settings, onSelectPatient, onN
   }, [generateActiveQR]);
 
   // Filtered patient list
-  const filteredPatients = patients.filter(p => {
-    const term = searchTerm.toLowerCase();
-    return p.firstName.toLowerCase().includes(term) ||
-           p.lastName.toLowerCase().includes(term) ||
+  const filteredPatients = (patients || []).filter(p => {
+    if (!p) return false;
+    const term = (searchTerm || '').toLowerCase();
+    return (p.firstName || '').toLowerCase().includes(term) ||
+           (p.lastName || '').toLowerCase().includes(term) ||
            (p.nickname || '').toLowerCase().includes(term) ||
-           p.hn.toLowerCase().includes(term);
+           (p.hn || '').toLowerCase().includes(term);
   });
 
   // Trigger Action Feedback

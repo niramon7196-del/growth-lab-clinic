@@ -98,6 +98,18 @@ export default function AssignedExercisesView({
   const [showFinalConfirmModal, setShowFinalConfirmModal] = useState<boolean>(false);
   const [isSubmittingFinal, setIsSubmittingFinal] = useState<boolean>(false);
   const [showHabitScoreModal, setShowHabitScoreModal] = useState<boolean>(false);
+  const [, setForceRender] = useState(0);
+
+  useEffect(() => {
+    const handleMediaUpdate = () => {
+      setForceRender(prev => prev + 1);
+    };
+    window.addEventListener('growthlab_exercise_media_updated', handleMediaUpdate);
+    return () => {
+      window.removeEventListener('growthlab_exercise_media_updated', handleMediaUpdate);
+    };
+  }, []);
+
   const [habitScoreData, setHabitScoreData] = useState<{
     score: number;
     grade: string;

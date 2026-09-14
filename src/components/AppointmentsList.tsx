@@ -929,7 +929,7 @@ export default function AppointmentsList({
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-slate-700 outline-hidden cursor-pointer"
                   >
                     <option value="">-- กรุณาเลือกผู้รับการดูแล --</option>
-                    {patients.filter(p => p.status === 'active').map((p) => {
+                    {(patients || []).filter(p => p && p.status === 'active').map((p) => {
                       const pInfo = formatPatientDisplay(p);
                       return (
                         <option key={p.id} value={p.id}>

@@ -77,8 +77,8 @@ export default function NotificationsPanel({
       daysMissing?: number;
     }> = [];
 
-    patients.forEach(patient => {
-      if (patient.status !== 'active') return;
+    (patients || []).forEach(patient => {
+      if (!patient || patient.status !== 'active') return;
 
       // Check Sleep Red Flags from sleepLogs / sleepMonthlyProfiles
       const recentSleepLogs = patient.sleepLogs || [];
@@ -155,8 +155,8 @@ export default function NotificationsPanel({
 
   // Compute compliance risk analysis (patients who trained less than 3 times in the last 7 days)
   const riskPatients = useMemo(() => {
-    return patients.filter(p => p.status === 'active').map((patient) => {
-      const patientLogs = logs.filter(
+    return (patients || []).filter(p => p && p.status === 'active').map((patient) => {
+      const patientLogs = (logs || []).filter(
         (l) => l.patientId === patient.id && new Date(l.date) >= sevenDaysAgo
       );
       

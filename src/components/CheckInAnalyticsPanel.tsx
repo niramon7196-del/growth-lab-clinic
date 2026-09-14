@@ -161,7 +161,7 @@ export default function CheckInAnalyticsPanel({
 
   // Enhanced patients with merged real check-in history from Google Sheets Daily_Logs
   const enhancedPatients = useMemo(() => {
-    return patients.map(patient => {
+    return (patients || []).map(patient => {
       const matchingCloudLogs = (cloudLogs || []).filter(
         l => (l.patientId && (l.patientId === patient.id || l.patientId === patient.hn)) ||
              ((l as any).hn && (l as any).hn === patient.hn)
@@ -184,7 +184,7 @@ export default function CheckInAnalyticsPanel({
 
   // Aggregate metrics across all patients
   const patientMetrics = useMemo(() => {
-    return enhancedPatients.map(patient => {
+    return (enhancedPatients || []).map(patient => {
       const metrics = calculateConsistencyMetrics(patient);
       const isToday = hasCheckedInToday(patient);
       const todayRecord = getTodayCheckInRecord(patient);
@@ -205,12 +205,12 @@ export default function CheckInAnalyticsPanel({
   }, [enhancedPatients]);
 
   const totalPatients = enhancedPatients.length;
-  const checkedInTodayCount = patientMetrics.filter(p => p.isToday).length;
+  const checkedInTodayCount = (patientMetrics || []).filter(p => p.isToday).length;
 
   // 3-Category automatic classification counts
-  const consistentList = useMemo(() => patientMetrics.filter(p => p.classification.category === 'CONSISTENT'), [patientMetrics]);
-  const irregularList = useMemo(() => patientMetrics.filter(p => p.classification.category === 'IRREGULAR'), [patientMetrics]);
-  const dormantList = useMemo(() => patientMetrics.filter(p => p.classification.category === 'DORMANT'), [patientMetrics]);
+  const consistentList = useMemo(() => (patientMetrics || []).filter(p => p.classification?.category === 'CONSISTENT'), [patientMetrics]);
+  const irregularList = useMemo(() => (patientMetrics || []).filter(p => p.classification?.category === 'IRREGULAR'), [patientMetrics]);
+  const dormantList = useMemo(() => (patientMetrics || []).filter(p => p.classification?.category === 'DORMANT'), [patientMetrics]);
 
   const consistentCount = consistentList.length;
   const irregularCount = irregularList.length;
@@ -1159,7 +1159,7 @@ export default function CheckInAnalyticsPanel({
 
           {/* 7-Day Quick Stat Chips */}
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2 pt-2 border-t border-slate-100">
-            {weeklyGraphData.map((d) => (
+            {(weeklyGraphData || []).map((d) => (
               <div 
                 key={d.date}
                 className={`p-2 rounded-2xl text-center border transition-all ${
@@ -1518,7 +1518,7 @@ export default function CheckInAnalyticsPanel({
                   </td>
                 </tr>
               ) : (
-                filteredList.map(({ patient, metrics, isToday, classification }) => {
+                (filteredList || []).map(({ patient, metrics, isToday, classification }) => {
                   return (
                     <tr key={patient.id} className="hover:bg-indigo-50/50 transition-colors">
                       <td className="py-3.5 px-3.5">
@@ -1534,22 +1534,22 @@ export default function CheckInAnalyticsPanel({
 
                       <td className="py-3.5 px-3">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border inline-block ${
-                          classification.category === 'CONSISTENT' 
+                          classification?.category === 'CONSISTENT' 
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-2xs' 
-                            : classification.category === 'IRREGULAR'
+                            : classification?.category === 'IRREGULAR'
                               ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-2xs'
                               : 'bg-rose-50 text-rose-800 border-rose-200 shadow-2xs'
                         }`}>
-                          {classification.categoryLabelTh}
+                          {classification?.categoryLabelTh || '-'}
                         </span>
                         <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
-                          {classification.descriptionTh}
+                          {classification?.descriptionTh || ''}
                         </span>
                       </td>
 
                       <td className="py-3.5 px-3">
                         <div className="flex items-center gap-1">
-                          {metrics.recent7Days.map((day) => (
+                          {(metrics?.recent7Days || []).map((day) => (
                             <div 
                               key={day.date}
                               title={`${day.dayLabel} (${day.date}): ${day.isCheckedIn ? 'เช็คอินแล้ว' : 'ไม่ได้เช็คอิน'}`}
@@ -1564,7 +1564,7 @@ export default function CheckInAnalyticsPanel({
                           ))}
                         </div>
                         <span className="text-[10px] text-indigo-700 font-extrabold block mt-1">
-                          {metrics.weeklyCount}/7 วัน ({metrics.weeklyCompliancePercent}%)
+                          {metrics?.weeklyCount || 0}/7 วัน ({metrics?.weeklyCompliancePercent || 0}%)
                         </span>
                       </td>
 

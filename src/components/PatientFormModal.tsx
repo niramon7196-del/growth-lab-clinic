@@ -96,7 +96,8 @@ export default function PatientFormModal({
     setLocalSaving(false);
 
     if (mode === 'edit' && initialData) {
-      const birthAge = initialData.dob ? calculateAgeFromDob(initialData.dob) : 0;
+      const existingDob = (initialData.birth_date || initialData.birthDate || initialData.dob || '').toString().trim();
+      const birthAge = existingDob ? calculateAgeFromDob(existingDob) : 0;
       const computedAge = birthAge > 0 ? birthAge : (initialData.age || 0);
       const genderMatch = initialData.notes?.match(/\[เพศ:\s*(.*?)\]/);
       const cleanGender = (initialData.gender || (genderMatch ? genderMatch[1] : 'ชาย')) as 'ชาย' | 'หญิง' | 'อื่นๆ';
@@ -109,7 +110,7 @@ export default function PatientFormModal({
         lastName: initialData.lastName || '',
         nickname: initialData.nickname || '',
         gender: cleanGender,
-        dob: initialData.dob || '2016-03-15',
+        dob: existingDob || '',
         age: computedAge,
         citizenId: initialData.citizenId || '',
         phone: initialData.phone || initialData.parentPhone || '',
@@ -272,13 +273,17 @@ export default function PatientFormModal({
       const parsedWeight = parseFloat(String(formData.weight).trim());
       const parsedHeight = parseFloat(String(formData.height).trim());
 
+      const fullName = `${cleanFirst} ${formData.lastName.trim()}`.trim();
       const patientPayload = {
         id: initialData?.id,
         title: finalTitle,
         firstName: cleanFirst,
         lastName: formData.lastName.trim(),
+        name: fullName,
         nickname: formData.nickname.trim(),
         gender: formData.gender,
+        birth_date: formData.dob || undefined,
+        birthDate: formData.dob || undefined,
         dob: formData.dob,
         age: effectiveAge,
         citizenId: formData.citizenId.trim() || undefined,

@@ -65,6 +65,14 @@ export default function PatientInteractiveCalendar({
 
   // Sync initial appointment selection when available
   useEffect(() => {
+    // Clear legacy mock data
+    try {
+      localStorage.removeItem('mock_appointments');
+      localStorage.removeItem('demo_patient');
+    } catch (e) {
+      console.warn(e);
+    }
+
     if (initialAppt && (!selectedApptId || !filteredAppointments.some(a => a.id === selectedApptId))) {
       setSelectedApptId(initialAppt.id);
       setSelectedDateStr(initialAppt.date);
@@ -112,7 +120,7 @@ export default function PatientInteractiveCalendar({
 
   const currentMonthAppointments = useMemo(() => {
     return filteredAppointments.filter(a => {
-      if (!a || !a.date || a.status === 'cancelled' || a.status === 'ยกเลิก') return false;
+      if (!a || !a.date || a.status === 'cancelled' || a.status === 'ยกเลิก' || a.status === 'Cancelled (ยกเลิก)') return false;
       let clean = (a.date || '').trim();
       if (clean.includes('T')) clean = clean.split('T')[0];
       const parts = clean.split('-');
@@ -194,7 +202,7 @@ export default function PatientInteractiveCalendar({
       .filter(a => {
         if (!a || !a.date) return false;
         // Keep active appointments visible on Calendar unless permanently deleted from Google Sheets
-        if (a.status === 'cancelled' || a.status === 'ยกเลิก') return false;
+        if (a.status === 'cancelled' || a.status === 'ยกเลิก' || a.status === 'Cancelled (ยกเลิก)') return false;
 
         let clean = (a.date || '').trim();
         if (clean.includes('T')) clean = clean.split('T')[0];
@@ -287,6 +295,8 @@ export default function PatientInteractiveCalendar({
       successMsg = '✅ สะดวกมาตามนัด (ยืนยัน) บันทึกลงในระบบเรียบร้อยแล้วค่ะ';
     } else if (targetStatus?.includes('Reschedule') || targetStatus?.includes('ขอเลื่อน')) {
       successMsg = '🔄 ส่งคำขอเลื่อนนัดพร้อมเหตุผลเรียบร้อยแล้วค่ะ (ทางคลินิกจะติดต่อกลับเพื่อยืนยันวันเวลาใหม่)';
+    } else if (targetStatus?.includes('Cancelled') || targetStatus?.includes('ยกเลิก')) {
+      successMsg = '🗑️ ลบการนัดหมายออกจากระบบเรียบร้อยแล้วค่ะ';
     }
 
     setSaveFeedback({
@@ -852,6 +862,18 @@ export default function PatientInteractiveCalendar({
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4 text-amber-700" />}
                   <span>🔄 ส่งคำขอเลื่อนนัด</span>
+                </button>
+
+                {/* 3. Delete Appointment Button */}
+                <button
+                  type="button"
+                  onClick={() => handleSaveNoteAndStatus('Cancelled (ยกเลิก)')}
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-rose-900 bg-rose-100 hover:bg-rose-200 border border-rose-300 shadow-2xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                  title="ลบการนัดหมายนี้ และอัปเดตสถานะในระบบ Appointments อัตโนมัติ"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-rose-700">🗑️</span>}
+                  <span>ลบการนัดหมาย</span>
                 </button>
               </div>
 

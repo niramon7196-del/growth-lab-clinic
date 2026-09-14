@@ -45,6 +45,7 @@ import {
   ExerciseScoreConfig,
   generateWeeklyGrid 
 } from '../utils/clinicalCalculations';
+import { calculateAgeFromDob } from '../utils/patientUtils';
 
 interface ExerciseTrackerProps {
   patients: Patient[];
@@ -202,7 +203,9 @@ export default function ExerciseTracker({ patients, selectedPatientId, onUpdateP
     height,
     weight,
     bmi: currentBMI,
-    age: currentPatient?.age || 10,
+    age: (currentPatient?.birth_date || currentPatient?.birthDate || currentPatient?.dob) 
+      ? calculateAgeFromDob(currentPatient.birth_date || currentPatient.birthDate || currentPatient.dob) 
+      : (typeof currentPatient?.age === 'number' ? currentPatient.age : (parseInt(String(currentPatient?.age || 0), 10) || 0)),
     sex: 'male',
     previousHeight,
     previousMeasurementDate: previousDate,

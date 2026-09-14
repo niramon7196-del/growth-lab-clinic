@@ -123,6 +123,18 @@ export default function ExerciseView({
     return 'patient_homework';
   });
 
+  // Keep viewMode synced with incoming initialStage prop
+  useEffect(() => {
+    if (initialStage === 'master_template') {
+      setViewMode('master_template');
+    } else if (initialStage && initialStage !== 'all' && patient) {
+      setViewMode('patient_homework');
+      if (['gns', 'sleep', 'exercise', 'omt'].includes(initialStage)) {
+        setActiveStage(initialStage as any);
+      }
+    }
+  }, [initialStage, patient]);
+
   const patientId = patient?.id || 'guest';
   const patientHn = patient?.hn || 'HN-GUEST';
   const patientName = patient ? `${patient.nickname || patient.firstName || 'ผู้ใช้งาน'} ${patient.lastName || ''}`.trim() : 'ผู้ใช้งานทั่วไป';
@@ -561,7 +573,7 @@ export default function ExerciseView({
               className="bg-slate-50 text-slate-900 font-bold text-xs rounded-xl px-2.5 py-1.5 border border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer"
             >
               <option value="" disabled>-- เลือกคนไข้เพื่อตรวจการบ้านรายบุคคล --</option>
-              {patients.map(p => (
+              {(patients || []).map(p => (
                 <option key={p.id} value={p.id}>
                   HN: {p.hn} • {p.nickname || p.firstName} {p.lastName || ''}
                 </option>
@@ -746,7 +758,7 @@ export default function ExerciseView({
                                       <span>ขั้นตอนการปฏิบัติ (Step-by-Step Instructions):</span>
                                     </span>
                                     <ul className="space-y-1.5 pl-1">
-                                      {selectedEx.steps.map((st: string, sIdx: number) => (
+                                      {(selectedEx.steps || []).map((st: string, sIdx: number) => (
                                         <li key={sIdx} className="text-xs text-slate-700 font-medium flex items-start gap-2 leading-relaxed">
                                           <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0 mt-1.5" />
                                           <span>{st}</span>
@@ -768,12 +780,12 @@ export default function ExerciseView({
                     <div className="flex items-center justify-between px-1">
                       <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-purple-600" />
-                        <span>รายการแบบฝึกหัดที่ได้รับมอบหมาย ({completedCount}/{exercises.length} ท่า)</span>
+                        <span>รายการแบบฝึกหัดที่ได้รับมอบหมาย ({completedCount}/{(exercises || []).length} ท่า)</span>
                       </h2>
                     </div>
 
                     <div className="grid grid-cols-1 gap-5">
-                      {exercises.map((ex: any, idx: number) => {
+                      {(exercises || []).map((ex: any, idx: number) => {
                         const done = Boolean(completedMap[ex.id]);
                         const currentReps = repsMap[ex.id] || 0;
                         const { target: targetReps, unit } = getTargetReps(ex.reps);

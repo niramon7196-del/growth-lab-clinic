@@ -21,7 +21,7 @@ export default function BeforeAfter({ onBack, patients, onUpdatePatient, selecte
   const isVerified = BEFORE_AFTER_SOURCE_STATUS === 'VERIFIED';
   const isSourceRequired = BEFORE_AFTER_SOURCE_STATUS === 'SOURCE_REQUIRED';
 
-  const currentPatient = selectedPatientId ? patients.find(p => p.id === selectedPatientId) : undefined;
+  const currentPatient = selectedPatientId ? (patients || []).find(p => p.id === selectedPatientId) : undefined;
   
   const [sliderPosition, setSliderPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
@@ -145,7 +145,7 @@ export default function BeforeAfter({ onBack, patients, onUpdatePatient, selecte
     }
 
     const targetPatientId = uploadForm.patientId || currentPatient?.id;
-    const targetPatient = patients.find(p => p.id === targetPatientId) || currentPatient;
+    const targetPatient = (patients || []).find(p => p.id === targetPatientId) || currentPatient;
 
     if (!targetPatient) {
       setUploadError('กรุณาเลือกผู้รับการดูแลสำหรับรูปภาพนี้');
@@ -623,9 +623,9 @@ export default function BeforeAfter({ onBack, patients, onUpdatePatient, selecte
                   onChange={(e) => setUploadForm({ ...uploadForm, patientId: e.target.value })}
                   className="w-full text-xs font-semibold p-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-400 outline-none"
                 >
-                  {patients.map(p => (
+                  {(patients || []).map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.firstName.replace(/\s*\(DEMO\)/, '')} {p.lastName} (HN: {p.hn})
+                      {p.firstName?.replace(/\s*\(DEMO\)/, '') || p.name || p.hn} {p.lastName || ''} (HN: {p.hn})
                     </option>
                   ))}
                 </select>

@@ -11,6 +11,7 @@ import {
 import { UserRole } from '../types';
 import { saveClinicConfigToGoogleSheets, getWebhookUrl } from '../services/googleAppsScriptService';
 import { cloudApi } from '../services/cloudApi';
+import { getStoredExerciseMediaMap, saveExerciseMediaMap } from '../utils/exerciseMediaManager';
 
 export interface VideoContent {
   id: string;
@@ -413,6 +414,27 @@ export const MediaLibraryHub: React.FC<MediaLibraryHubProps> = ({ userRole, onNa
       localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(updatedCategories));
       window.dispatchEvent(new CustomEvent('growthlab_media_library_updated', { detail: updatedCategories }));
 
+      // Synchronize with Exercise Media Map to immediately update the patient live data array
+      const mediaMap = getStoredExerciseMediaMap();
+      updatedCategories.forEach(cat => {
+        cat.videos.forEach(v => {
+          mediaMap[v.id] = {
+            exerciseId: v.id,
+            title: v.title,
+            category: cat.id,
+            videoUrl: v.videoUrl || '',
+            youtubeId: v.youtubeId,
+            imageUrl: v.imageUrl,
+            videoDownloadUrl: v.videoDownloadUrl,
+            imageDownloadUrl: v.imageDownloadUrl,
+            description: v.description,
+            steps: v.steps,
+            updatedAt: new Date().toISOString()
+          };
+        });
+      });
+      saveExerciseMediaMap(mediaMap);
+
       // Synchronize to Google Sheets & Cloud Config
       const webhookUrl = getWebhookUrl();
       if (webhookUrl) {
@@ -530,6 +552,9 @@ export const MediaLibraryHub: React.FC<MediaLibraryHubProps> = ({ userRole, onNa
     setDeletingTarget(null);
     setCopyFeedback(`ลบ "${video.title}" เรียบร้อยแล้ว`);
     setTimeout(() => setCopyFeedback(null), 3000);
+    
+    // Fire event to notify App.tsx to remove this video from patient assignments array immediately
+    window.dispatchEvent(new CustomEvent('growthlab_video_deleted', { detail: { videoId: video.id } }));
   };
 
   // Video File Upload Handler

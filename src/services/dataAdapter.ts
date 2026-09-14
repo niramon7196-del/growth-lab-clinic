@@ -51,7 +51,8 @@ import {
   AgeGroupBadgeInfo,
   parseAndNormalizeDob,
   deduplicateAppointments,
-  deduplicatePatientList
+  deduplicatePatientList,
+  invalidatePatientProfileCache
 } from '../utils/patientUtils';
 import { parseAndCleanAssignedTasks, sanitizeTaskCode } from '../utils/cleanTasks';
 
@@ -63,7 +64,8 @@ export {
   detectGenderFromPatientData,
   formatNicknameByAge,
   formatPatientDisplay,
-  parseAndNormalizeDob
+  parseAndNormalizeDob,
+  invalidatePatientProfileCache
 };
 export type { PatientNameFormatted, AgeGroupType, AgeGroupBadgeInfo };
 
@@ -547,8 +549,8 @@ export function mapRawGoogleSheetRowToPatient(
   }
 
   // Extract DOB / Age with real-time recalculation
-  const rawDob = String(getVal('dob', 'DOB', 'birthDate', 'BirthDate', 'birthdate', 'วันเกิด', 'วันเดือนปีเกิด') || candidateDobFromPhone || '').trim();
-  let dob = rawDob.includes('T') ? rawDob.split('T')[0] : (rawDob || existingPat?.dob || '');
+  const rawDob = String(getVal('birth_date', 'Birth_Date', 'dob', 'DOB', 'birthDate', 'BirthDate', 'birthdate', 'วันเกิด', 'วันเดือนปีเกิด') || candidateDobFromPhone || '').trim();
+  let dob = rawDob.includes('T') ? rawDob.split('T')[0] : (rawDob || existingPat?.birth_date || existingPat?.birthDate || existingPat?.dob || '');
 
   // Fallback defaults for verified patients if columns were shifted in Google Sheets
   if (targetHn === 'HN-00001') {
@@ -578,12 +580,12 @@ export function mapRawGoogleSheetRowToPatient(
   });
 
   const rawAge = getVal('age', 'Age', 'อายุ');
-  let age = Number(rawAge) || 0;
+  let age: number = typeof rawAge === 'number' ? rawAge : (parseInt(String(rawAge || 0), 10) || 0);
   if (dob) {
     age = calculateAgeFromDob(dob);
   }
   if (!age && existingPat?.age) {
-    age = existingPat.age;
+    age = typeof existingPat.age === 'number' ? existingPat.age : (parseInt(String(existingPat.age), 10) || 0);
   }
 
   const finalTitle = getSuggestedTitlePrefix(age, gender, rawTitle || extractedTitle || existingPat?.title);
@@ -676,10 +678,13 @@ export function mapRawGoogleSheetRowToPatient(
     title: finalTitle,
     firstName,
     lastName,
+    name: (raw.name || `${firstName} ${lastName}`.trim() || targetHn),
     nickname: finalNickname,
     age,
     gender,
     dob: dob || undefined,
+    birth_date: dob || undefined,
+    birthDate: dob || undefined,
     citizenId: citizenId || undefined,
     weight,
     height,
@@ -1020,10 +1025,16 @@ export const dataAdapter = {
       updatedPatient = updates as Patient;
     }
 
-    // 1. Immediately sync updated patient to Google Sheets
+    // Invalidate local cache for HN profile immediately
+    const targetHn = updatedPatient?.hn || (updates as any).hn || patientId;
+    if (targetHn) {
+      invalidatePatientProfileCache(targetHn, updatedPatient);
+    }
+
+    // 1. Immediately sync updated patient to Google Sheets with action: updatePatient and sheetName: Patients
     if (updatedPatient) {
       try {
-        await savePatientToGoogleSheets(updatedPatient, getWebhookUrl());
+        await savePatientToGoogleSheets(updatedPatient, getWebhookUrl(), 'updatePatient');
       } catch (e) {
         console.warn('[dataAdapter.updateMember] Google Sheets savePatient error:', e);
       }

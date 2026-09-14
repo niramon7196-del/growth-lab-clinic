@@ -4,7 +4,7 @@
  */
 
 import { Patient, Appointment, CheckInRecord, Exercise, SessionLog } from '../types';
-import { calculateAgeFromDob, getSuggestedTitlePrefix, detectGenderFromPatientData } from '../utils/patientUtils';
+import { calculateAgeFromDob, getSuggestedTitlePrefix, detectGenderFromPatientData, invalidatePatientProfileCache } from '../utils/patientUtils';
 import { formatAppointmentTime } from '../utils/checkInCalculations';
 import { 
   routeAppointmentToGoogleSheets, 
@@ -1048,7 +1048,20 @@ export async function savePatient(
                         (Array.isArray(patientData.assignments) ? patientData.assignments.map((a: any) => a.exerciseId || a.id) : []) || 
                         [];
 
+  const birth_date = (patientData.birth_date || patientData.birthDate || patientData.dob || '').toString().trim();
+  let calculatedAge: number | string = 0;
+  if (birth_date && birth_date !== '-') {
+    calculatedAge = calculateAgeFromDob(birth_date);
+  } else if (patientData.age !== undefined && patientData.age !== null && patientData.age !== '') {
+    calculatedAge = patientData.age;
+  }
+
   const formattedPayload = {
+    action: 'savePatient',
+    altAction: 'updatePatient',
+    sheetName: 'Patients',
+    targetSheet: 'Patients',
+    tab: 'Patients',
     hn,
     id: hn,
     name: fullName,
@@ -1057,9 +1070,10 @@ export async function savePatient(
     lastName: patientData.lastName || '',
     nickname: (patientData.nickname || patientData.nickName || patientData.NickName || '').toString().trim(),
     gender: patientData.gender || detectGenderFromPatientData(patientData) || 'ชาย',
-    birthDate: patientData.birthDate || patientData.dob || '',
-    dob: patientData.dob || patientData.birthDate || '',
-    age: patientData.age || 0,
+    birth_date,
+    birthDate: birth_date,
+    dob: birth_date,
+    age: calculatedAge,
     phone: patientData.phone || patientData.parentPhone || '',
     parentPhone: patientData.parentPhone || patientData.phone || '',
     parentName: patientData.parentName || '',
@@ -1073,17 +1087,25 @@ export async function savePatient(
     assignedExercises: assignedTasks,
     assignments: patientData.assignments || [],
     qrToken: patientData.qrToken || `tok_${hn}_${hn.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-    sheetName: 'Patients',
-    targetSheet: 'Patients',
-    tab: 'Patients',
     lastUpdated: new Date().toISOString()
   };
 
-  // 1. Save locally first (Hybrid Offline-First)
+  // 1. Save locally first (Hybrid Offline-First) & Invalidate local cache
   savePatientLocal(formattedPayload);
+  invalidatePatientProfileCache(hn, formattedPayload);
 
   // 2. Sync to Cloud
   return cloudPost('savePatient', formattedPayload, customUrl);
+}
+
+/**
+ * updatePatient alias
+ */
+export async function updatePatient(
+  patientData: any,
+  customUrl?: string
+): Promise<CloudApiResponse> {
+  return savePatient(patientData, customUrl);
 }
 
 /**

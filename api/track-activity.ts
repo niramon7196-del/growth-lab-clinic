@@ -1,4 +1,18 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+// Type definitions for Serverless endpoint
+export interface VercelRequest {
+  method?: string;
+  body?: any;
+  headers?: Record<string, any>;
+  query?: Record<string, any>;
+  [key: string]: any;
+}
+export interface VercelResponse {
+  status: (code: number) => VercelResponse;
+  json: (body: any) => void;
+  send: (body: any) => void;
+  setHeader: (name: string, value: string) => void;
+  [key: string]: any;
+}
 
 /**
  * โครงสร้างข้อมูลกิจกรรม (Activity Payload)

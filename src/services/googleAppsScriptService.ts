@@ -1,5 +1,5 @@
 import { parseAndCleanAssignedTasks, sanitizeTaskCode } from '../utils/cleanTasks';
-import { detectGenderFromPatientData, formatHN, calculateAgeFromDob } from '../utils/patientUtils';
+import { detectGenderFromPatientData, formatHN, calculateAgeFromDob, invalidatePatientProfileCache } from '../utils/patientUtils';
 import { 
   routeAppointmentToGoogleSheets, 
   dataRouter, 
@@ -62,7 +62,8 @@ export function getWebhookUrl(): string {
  */
 export async function savePatientToGoogleSheets(
   patient: any,
-  webhookUrl?: string
+  webhookUrl?: string,
+  actionOverride?: 'updatePatient' | 'savePatient' | 'registerPatient'
 ): Promise<{ success: boolean; data?: any; error?: any }> {
   const targetUrl = webhookUrl || getWebhookUrl() || SCRIPT_URL;
   if (!targetUrl) {
@@ -91,8 +92,17 @@ export async function savePatientToGoogleSheets(
 
     const nickname = (patient.nickname || '').toString().trim() || '-';
     const gender = (patient.gender || detectGenderFromPatientData(patient) || 'ชาย').toString().trim() || 'ชาย';
-    const birthDate = (patient.birthDate || patient.dob || '').toString().trim() || '-';
-    const calculatedAge = birthDate && birthDate !== '-' ? calculateAgeFromDob(birthDate) : (Number(patient.age) || 0);
+    const birthDate = (patient.birth_date || patient.birthDate || patient.dob || '').toString().trim() || '-';
+    
+    // Dynamically calculate age from birth_date compared to current date
+    let calculatedAge: number | string = 0;
+    if (birthDate && birthDate !== '-') {
+      calculatedAge = calculateAgeFromDob(birthDate);
+    } else if (patient.age !== undefined && patient.age !== null && patient.age !== '') {
+      // If no birth_date is provided, accurately reflect the exact age data from Google Sheet Patients tab
+      calculatedAge = patient.age;
+    }
+
     const phone = (patient.phone || patient.parentPhone || patient.tel || '').toString().trim() || '-';
     
     // Extract assigned tasks list formatted cleanly for Google Sheets
@@ -106,42 +116,57 @@ export async function savePatientToGoogleSheets(
     }
 
     const status = (patient.status && String(patient.status).toLowerCase() === 'active') ? 'active' : (patient.status ? String(patient.status) : 'active');
+    const notes = (patient.notes || '').toString().trim() || '-';
+    const weight = patient.weight || '-';
+    const height = patient.height || '-';
+    const startDate = patient.startDate || new Date().toISOString().split('T')[0];
 
+    const action = actionOverride || 'updatePatient';
+    const altAction = action === 'updatePatient' ? 'savePatient' : 'updatePatient';
+
+    // Google Sheet exact column schema: hn, name, birth_date, age, gender, phone, etc.
     const requestBody = {
-      action: 'registerPatient',
-      altAction: 'savePatient',
+      action,
+      altAction,
       sheetName: 'Patients',
+      targetSheet: 'Patients',
       hn,
-      patientName: fullName,
       name: fullName,
-      nickname,
-      gender,
+      patientName: fullName,
+      birth_date: birthDate,
       birthDate,
       dob: birthDate,
       age: calculatedAge,
+      gender,
       phone,
+      nickname,
       status,
       assignedTasks: assignedTasksStr,
-      notes: (patient.notes || '').toString().trim() || '-',
-      weight: patient.weight || '-',
-      height: patient.height || '-',
-      startDate: patient.startDate || new Date().toISOString().split('T')[0],
+      notes,
+      weight,
+      height,
+      startDate,
       payload: {
+        action,
+        altAction,
+        sheetName: 'Patients',
+        targetSheet: 'Patients',
         hn,
         name: fullName,
         patientName: fullName,
-        nickname,
-        gender,
+        birth_date: birthDate,
         birthDate,
         dob: birthDate,
         age: calculatedAge,
+        gender,
         phone,
-        assignedTasks: assignedTasksStr,
+        nickname,
         status,
-        notes: (patient.notes || '').toString().trim() || '-',
-        weight: patient.weight || '-',
-        height: patient.height || '-',
-        startDate: patient.startDate || new Date().toISOString().split('T')[0]
+        assignedTasks: assignedTasksStr,
+        notes,
+        weight,
+        height,
+        startDate
       }
     };
 
@@ -168,7 +193,20 @@ export async function savePatientToGoogleSheets(
       resData = { status: 'success', note: 'POST sent (no-cors mode)' };
     }
 
-    console.log('[googleAppsScriptService] registerPatient successfully synced to Google Sheets:', hn, resData);
+    // Invalidate local cache for HN profile immediately after save so the screen re-renders fresh data
+    invalidatePatientProfileCache(hn, {
+      ...patient,
+      hn,
+      name: fullName,
+      birth_date: birthDate,
+      birthDate,
+      dob: birthDate,
+      age: calculatedAge,
+      gender,
+      phone
+    });
+
+    console.log(`[googleAppsScriptService] ${action} successfully synced to Google Sheets:`, hn, resData);
     return { success: true, data: resData };
   } catch (error) {
     console.error('[googleAppsScriptService] Failed to save patient to Google Sheets:', error);

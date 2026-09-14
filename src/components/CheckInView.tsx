@@ -408,13 +408,13 @@ export default function CheckInView({ patient, onCheckIn, onGoToExercises }: Che
           </div>
         </div>
 
-        {dailyLogs.length === 0 ? (
+        {(dailyLogs || []).length === 0 ? (
           <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
             {isLoadingLogs ? 'กำลังโหลดประวัติการเช็กอินจาก Google Sheets...' : 'ยังไม่มีประวัติการเช็คอิน กดปุ่ม "เช็คอินวันนี้" ด้านบนเพื่อเริ่มต้น'}
           </div>
         ) : (
           <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-            {dailyLogs.map((item, index) => (
+            {(dailyLogs || []).map((item, index) => (
               <div 
                 key={item.id || index}
                 className="p-3 bg-purple-50/40 hover:bg-purple-50/80 rounded-2xl border border-purple-100/80 flex items-center justify-between gap-3 text-xs transition-all"
