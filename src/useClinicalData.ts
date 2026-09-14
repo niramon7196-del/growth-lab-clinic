@@ -3,6 +3,10 @@ import { cloudApi, API_URL, getApiUrl } from './services/cloudApi';
 
 const STORAGE_KEY = 'growthlab_master_data';
 
+let isSyncing = false;
+let lastSyncTime = 0;
+const SYNC_COOLDOWN_MS = 60000; // 60 seconds cooldown
+
 export function useClinicalData() {
   const [patients, setPatients] = useState<any[]>(() => {
     try {
@@ -29,6 +33,14 @@ export function useClinicalData() {
   };
 
   const syncFromCloud = async () => {
+    if (isSyncing) return;
+    
+    const now = Date.now();
+    if (now - lastSyncTime < SYNC_COOLDOWN_MS) {
+      return; // Use local data during cooldown
+    }
+
+    isSyncing = true;
     try {
       const res = await cloudApi.getInitialData();
       if (res.success && res.data) {
@@ -40,9 +52,12 @@ export function useClinicalData() {
           setAppointments(res.data.appointments);
           localStorage.setItem(STORAGE_KEY + '_appointments', JSON.stringify(res.data.appointments));
         }
+        lastSyncTime = Date.now();
       }
     } catch (err) {
       console.warn('[Sync] Offline or pending cloud connection', err);
+    } finally {
+      isSyncing = false;
     }
   };
 
