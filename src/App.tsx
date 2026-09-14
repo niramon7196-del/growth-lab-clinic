@@ -2462,12 +2462,10 @@ export default function App() {
     saveStateToLocal('growth_lab_appointments', updatedAppointments);
 
     // Live Cloud Sync: Save to Google Sheets master endpoint via dataAdapter (prevents duplicate row submissions)
-    try {
-      await dataAdapter.createMember(patientWithId);
-      dataAdapter.saveAppointments(updatedAppointments, autoAppointment).catch(e => console.warn('[App] Auto appointment sync error:', e));
-    } catch (err) {
+    dataAdapter.createMember(patientWithId).catch(err => {
       console.warn('[App] Cloud sync error during registration:', err);
-    }
+    });
+    dataAdapter.saveAppointments(updatedAppointments, autoAppointment).catch(e => console.warn('[App] Auto appointment sync error:', e));
 
     triggerFeedback(`เพิ่มผู้รับการดูแลและสร้างนัดหมายสำเร็จ (${formatThaiDate(apptDate)})`, 'success');
   };
@@ -2522,11 +2520,9 @@ export default function App() {
     const targetHn = cleanPatient.hn || cleanPatient.id;
     invalidatePatientProfileCache(targetHn, cleanPatient);
 
-    try {
-      await dataAdapter.updateMember(cleanPatient.id, cleanPatient);
-    } catch (err) {
+    dataAdapter.updateMember(cleanPatient.id, cleanPatient).catch(err => {
       console.warn('[App] Cloud sync error during edit:', err);
-    }
+    });
 
     triggerFeedback('อัปเดตข้อมูลสำเร็จ', 'success');
   };
@@ -3637,7 +3633,7 @@ export default function App() {
                 title="รีเฟรชข้อมูลสดตรงจาก Google Sheets (กดเมื่อต้องการอัปเดตข้อมูลด้วยมือ)"
               >
                 <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncingSheets ? 'animate-spin' : ''}`} />
-                <span className="hidden md:inline">{isSyncingSheets ? 'กำลังซิงค์...' : 'รีเฟรชข้อมูล (Sync Sheets)'}</span>
+                <span className="hidden md:inline">{isSyncingSheets ? 'กำลังซิงค์...' : 'รีเฟรชข้อมูล'}</span>
                 <span className="md:hidden">{isSyncingSheets ? 'ซิงค์...' : 'Sync'}</span>
               </button>
             )}
@@ -3762,9 +3758,10 @@ export default function App() {
                       const btn = document.getElementById('btn-add-patient-modal');
                       if (btn) btn.click();
                     }}
-                    className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer min-h-[44px]"
+                    className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-3 sm:px-4 py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px] sm:min-h-[44px]"
                   >
-                    <span>+ เพิ่มการดูแลใหม่</span>
+                    <span className="sm:hidden text-lg leading-none">+</span>
+                    <span className="hidden sm:inline">+ เพิ่มการดูแลใหม่</span>
                   </button>
                 )}
               </div>

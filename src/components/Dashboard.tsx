@@ -799,7 +799,7 @@ export default function Dashboard({
             title="รีเฟรชข้อมูลสดตรงจาก Google Sheets"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isSyncing ? 'animate-spin text-amber-500' : ''}`} />
-            <span>{isSyncing ? 'กำลังซิงค์...' : 'รีเฟรชข้อมูล (Sync Sheets)'}</span>
+            <span>{isSyncing ? 'กำลังซิงค์...' : 'รีเฟรชข้อมูล'}</span>
           </button>
 
           <button

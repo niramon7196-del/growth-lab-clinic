@@ -575,7 +575,7 @@ export default function AssignedExercisesView({
         }
 
         return (
-          <div className="space-y-8">
+          <div className="space-y-8 pb-32">
             {groupedCategories.map(category => (
               <div key={category.id} className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between px-1 gap-2 border-b border-slate-200 pb-2">

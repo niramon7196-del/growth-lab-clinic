@@ -45,12 +45,16 @@ export function useClinicalData() {
       const res = await cloudApi.getInitialData();
       if (res.success && res.data) {
         if (res.data.patients && Array.isArray(res.data.patients)) {
-          setPatients(res.data.patients);
-          localStorage.setItem(STORAGE_KEY + '_patients', JSON.stringify(res.data.patients));
+          if (res.data.patients.length > 0) {
+            setPatients(res.data.patients);
+            localStorage.setItem(STORAGE_KEY + '_patients', JSON.stringify(res.data.patients));
+          }
         }
         if (res.data.appointments && Array.isArray(res.data.appointments)) {
-          setAppointments(res.data.appointments);
-          localStorage.setItem(STORAGE_KEY + '_appointments', JSON.stringify(res.data.appointments));
+          if (res.data.appointments.length > 0) {
+            setAppointments(res.data.appointments);
+            localStorage.setItem(STORAGE_KEY + '_appointments', JSON.stringify(res.data.appointments));
+          }
         }
         lastSyncTime = Date.now();
       }
@@ -71,11 +75,9 @@ export function useClinicalData() {
     localStorage.setItem(STORAGE_KEY + '_patients', JSON.stringify(updated));
     triggerToast('บันทึกสำเร็จ', `เพิ่มคนไข้ ${newPatient.name || newPatient.firstName || newPatient.hn} เรียบร้อยแล้ว`);
 
-    try {
-      await cloudApi.savePatient(newPatient);
-    } catch (e) {
+    cloudApi.savePatient(newPatient).catch(e => {
       console.error('[Cloud] Save patient error:', e);
-    }
+    });
   };
 
   const handleAddAppointment = async (newAppt: any) => {
